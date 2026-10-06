@@ -88,6 +88,23 @@ def rule_pack(task_type: str, max_rules: int = 10) -> dict:
     return core.rule_pack_for(task_type, max_rules)
 
 
+@mcp.tool()
+def deep_rules(task_type: str, per_dim: int = 8) -> dict:
+    """Build the full multi-dimensional checklist for deep Persian editing.
+
+    General-purpose (not n8n-specific): any agent calls this once, then runs
+    the deep-edit loop itself —
+      1. edit the text against ``checklist`` (all rules),
+      2. review the edited text rule-by-rule, list remaining issues as JSON,
+      3. fix only those issues; repeat 2-3 until clean (max ~4 passes),
+      4. final read-through for rhythm, typos, native ear.
+    Combines the task-type rule_pack with the five fixed editorial dimensions
+    (نیم‌فاصله، نشانه‌گذاری، جمله، واژه، لحن); dedupes by note id.
+    Returns ``checklist`` as a ready-to-paste string plus structured ``rules``.
+    """
+    return core.deep_rules_for(task_type, per_dim)
+
+
 class _ApiKeyMiddleware(BaseHTTPMiddleware):
     """Bearer / ?api_key gate for the HTTP transports. /health stays open."""
 

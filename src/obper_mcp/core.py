@@ -258,3 +258,36 @@ def rule_pack_for(task_type: str, max_rules: int = 10) -> dict:
             rules.append({"title": doc["title"], "rule": _shorten(text), "id": doc["id"]})
     return {"task_type": task_type, "custom_queries": custom,
             "seed_queries": queries, "count": len(rules), "rules": rules}
+
+
+# Fixed editorial dimensions for the deep-polish pipeline: the task-specific
+# checklist plus the five dimensions every Persian text must pass.
+DEEP_DIMENSIONS = ["نیم‌فاصله", "ویرگول و نشانه‌گذاری",
+                   "ساختار جمله", "انتخاب واژه", "لحن متن"]
+
+
+def deep_rules_for(task_type: str, per_dim: int = 8) -> dict:
+    """Build the full multi-dimensional checklist for deep Persian editing.
+
+    Runs rule_pack_for for the task type plus each fixed editorial dimension,
+    dedupes by note id, and returns one merged checklist (~40 rules) plus a
+    ready-to-paste ``checklist`` string. This is the knowledge side of the
+    general deep-edit loop; any agent (Claude Desktop, Cursor, n8n, ...) runs
+    the edit -> review passes itself.
+    """
+    queries = [task_type, *DEEP_DIMENSIONS]
+    seen: dict[str, dict] = {}
+    dims = []
+    for q in queries:
+        before = len(seen)
+        pack = rule_pack_for(q, per_dim)
+        for r in pack["rules"]:
+            if r["id"] not in seen:
+                seen[r["id"]] = r
+        dims.append({"query": q, "count": len(seen) - before})
+    rules = list(seen.values())
+    checklist = "\n".join(f"{i + 1}. {r['title']}: {r['rule']}"
+                           for i, r in enumerate(rules))
+    return {"task_type": task_type, "dimensions": dims,
+            "rules_count": len(rules), "count": len(rules),
+            "rules": rules, "checklist": checklist}

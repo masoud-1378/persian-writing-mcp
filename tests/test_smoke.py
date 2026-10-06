@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Smoke tests for obsidian-persian-mcp.
 
-Covers all 6 tools over stdio, the HTTP transport (auth positive/negative),
+Covers all 7 tools over stdio, the HTTP transport (auth positive/negative),
 and the /health endpoint. Run with the search-console venv python:
 
     ~/workspace/mcp-servers/search-console/.venv/bin/python tests/test_smoke.py
@@ -66,6 +66,7 @@ async def stdio_tools():
             out["map_vault"] = await call("map_vault", {})
             out["ruling"] = await call("ruling", {"query": "فرق نقطه و ویرگول"})
             out["rule_pack"] = await call("rule_pack", {"task_type": "گزارش رسمی", "max_rules": 10})
+            out["deep_rules"] = await call("deep_rules", {"task_type": "گزارش رسمی", "per_dim": 8})
     return out
 
 
@@ -88,10 +89,10 @@ def http_request(method, path, key=None, data=None):
 
 
 def main():
-    # ---- stdio: all 6 tools ----
+    # ---- stdio: all 7 tools ----
     out = asyncio.run(stdio_tools())
-    check("stdio tools listed (6)", out["tool_names"] == sorted(
-        ["search", "read_note", "map_vault", "reindex", "ruling", "rule_pack"]),
+    check("stdio tools listed (7)", out["tool_names"] == sorted(
+        ["search", "read_note", "map_vault", "reindex", "ruling", "rule_pack", "deep_rules"]),
         str(out["tool_names"]))
     check("search returns hits", len(out["search"].get("hits", [])) > 0)
     check("read_note returns text", len(out["read_note"].get("text", "")) > 100)
@@ -102,6 +103,11 @@ def main():
     check("rule_pack returns <=10 rules", 0 < rp.get("count", 0) <= 10, str(rp.get("count")))
     check("rule_pack rules have title+rule",
           all(r.get("title") and r.get("rule") for r in rp.get("rules", [])))
+    dr = out["deep_rules"]
+    check("deep_rules returns merged checklist",
+          dr.get("rules_count", 0) >= 20 and len(dr.get("checklist", "")) > 500,
+          str(dr.get("rules_count")))
+    check("deep_rules covers 6 dimensions", len(dr.get("dimensions", [])) == 6)
 
     # ---- HTTP transport ----
     proc = subprocess.Popen(

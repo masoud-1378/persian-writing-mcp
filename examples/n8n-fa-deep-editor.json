@@ -14,7 +14,7 @@
         "color": 4,
         "height": 460,
         "width": 420,
-        "content": "## ویراستار عمیق فارسی\nمتن را در چند پاسِ ویراستاری-بازبینی صیقل می‌دهد تا تمیز شود.\n\n۱. سرور: `obper-mcp --transport streamable-http --port 8060 --api-key <KEY>`\n۲. در گره rule_pack کلید را در Headers Override بگذار\n۳. به گره «مدل زبانی» کردنشیال مدل وصل کن\n۴. تست: POST /fa-deep-edit با `{\\\"text\\\": \\\"...\\\", \\\"task_type\\\": \\\"گزارش رسمی\\\"}`\n\nگردآوری قاعده: ۶ پرس‌وجو (نوع متن + نیم‌فاصله + نشانه‌گذاری + جمله + واژه + لحن) → تا ~۴۰ قاعده → حداکثر ۴ پاس ویراستاری (هر پاس فقط اگر بازبین ایراد بگیرد) → خوانش آخر."
+        "content": "## ویراستار عمیق فارسی\nمتن را در چند پاسِ ویراستاری-بازبینی صیقل می‌دهد تا تمیز شود.\n\n۱. سرور: `obper-mcp --transport streamable-http --port 8060 --api-key <KEY>`\n۲. در گره deep_rules کلید را در Headers Override بگذار\n۳. به گره «مدل زبانی» کردنشیال مدل وصل کن\n۴. تست: POST /fa-deep-edit با `{\"text\": \"...\", \"task_type\": \"گزارش رسمی\"}`\n\nابزار deep_rules یک چک‌لیست ~۴۰ قاعده‌ای می‌دهد (نوع متن + نیم‌فاصله + نشانه‌گذاری + جمله + واژه + لحن) → تا ۴ پاس ویراستاری (هر پاس فقط اگر بازبین ایراد بگیرد) → خوانش آخر → متن نهایی + گزارش."
       }
     },
     {
@@ -34,52 +34,6 @@
       }
     },
     {
-      "id": "code-q",
-      "name": "فهرست پرس‌وجوها",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": "2",
-      "position": [
-        700,
-        200
-      ],
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const prev = $('دریافت متن فارسی').first().json;\nconst taskType = prev.task_type || 'متن وب';\nconst queries = [taskType, 'نیم‌فاصله', 'ویرگول و نشانه‌گذاری', 'ساختار جمله', 'انتخاب واژه', 'لحن متن'];\nreturn queries.map(q => ({ json: { query: q } }));"
-      }
-    },
-    {
-      "id": "mcp-1",
-      "name": "rule_pack",
-      "type": "n8n-nodes-mcp.mcpClient",
-      "typeVersion": "1",
-      "position": [
-        920,
-        200
-      ],
-      "parameters": {
-        "connectionType": "http",
-        "uriOverride": "http://localhost:8060/mcp",
-        "headersOverride": "{\"Authorization\": \"Bearer <PUT-API-KEY-HERE>\"}",
-        "operation": "executeTool",
-        "toolName": "rule_pack",
-        "toolParameters": "{\n  \"task_type\": \"={{ $json.query }}\",\n  \"max_rules\": 8\n}"
-      }
-    },
-    {
-      "id": "code-m",
-      "name": "ادغام قاعده‌ها",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": "2",
-      "position": [
-        1140,
-        200
-      ],
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const seen = new Set();\nconst rules = [];\nfor (const it of $input.all()) {\n  const j = it.json;\n  const data = j.result ?? j.structuredContent ?? j;\n  for (const r of (data.rules ?? [])) {\n    if (r.id && !seen.has(r.id)) { seen.add(r.id); rules.push(r); }\n  }\n}\nconst checklist = rules.map((r, i) => `${i+1}. ${r.title}: ${r.rule}`).join('\\n');\nreturn [{ json: { checklist, rules_count: rules.length } }];"
-      }
-    },
-    {
       "id": "code-p1",
       "name": "پرامپت پاس ۱",
       "type": "n8n-nodes-base.code",
@@ -90,7 +44,7 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const prev = $('دریافت متن فارسی').first().json;\nconst m = $('ادغام قاعده‌ها').first().json;\nconst text = prev.text ?? '';\nconst prompt =\n  'متن فارسی زیر را سطر به سطر با تک‌تک بندهای این چک‌لیست ویراستاری کن. '\n  + 'هر بندی که به متن می‌خورد اعمال کن؛ معنا را عوض نکن؛ چیزی کم یا اضافه نکن. '\n  + 'فقط متن نهایی ویراسته را برگردان، بدون هیچ توضیحی.\\n\\n'\n  + `چک‌لیست (${m.rules_count} قاعده):\\n${m.checklist}\\n\\nمتن:\\n${text}`;\nreturn [{ json: { prompt } }];"
+        "jsCode": "const prev = $('دریافت متن فارسی').first().json;\nconst m = $('deep_rules').first().json;\nconst text = prev.text ?? '';\nconst prompt =\n  'متن فارسی زیر را سطر به سطر با تک‌تک بندهای این چک‌لیست ویراستاری کن. '\n  + 'هر بندی که به متن می‌خورد اعمال کن؛ معنا را عوض نکن؛ چیزی کم یا اضافه نکن. '\n  + 'فقط متن نهایی ویراسته را برگردان، بدون هیچ توضیحی.\\n\\n'\n  + `چک‌لیست (${m.rules_count} قاعده):\\n${m.checklist}\\n\\nمتن:\\n${text}`;\nreturn [{ json: { prompt } }];"
       }
     },
     {
@@ -121,7 +75,7 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('ادغام قاعده‌ها').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج. '\n  + 'هر بندی که هنوز رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
+        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('deep_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج. '\n  + 'هر بندی که هنوز رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
       }
     },
     {
@@ -198,7 +152,7 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const a = $input.first().json;\nconst edited = a.edited ?? '';\nconst m = $('ادغام قاعده‌ها').first().json;\nconst items = (a.issues ?? []).map((s, i) => `${i+1}. ${s}`).join('\\n');\nconst prompt =\n  'این متن یک بار ویراسته شده ولی بازبین هنوز این ایرادها را گزارش کرده:\\n'\n  + items + '\\n\\nفقط همین ایرادها را اصلاح کن؛ بقیهٔ متن را دست نزن. '\n  + 'فقط متن نهایی را برگردان، بدون هیچ توضیحی.\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن:\\n${edited}`;\nreturn [{ json: { prompt } }];"
+        "jsCode": "const a = $input.first().json;\nconst edited = a.edited ?? '';\nconst m = $('deep_rules').first().json;\nconst items = (a.issues ?? []).map((s, i) => `${i+1}. ${s}`).join('\\n');\nconst prompt =\n  'این متن یک بار ویراسته شده ولی بازبین هنوز این ایرادها را گزارش کرده:\\n'\n  + items + '\\n\\nفقط همین ایرادها را اصلاح کن؛ بقیهٔ متن را دست نزن. '\n  + 'فقط متن نهایی را برگردان، بدون هیچ توضیحی.\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن:\\n${edited}`;\nreturn [{ json: { prompt } }];"
       }
     },
     {
@@ -229,7 +183,7 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('ادغام قاعده‌ها').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج. '\n  + 'هر بندی که هنوز رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
+        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('deep_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج. '\n  + 'هر بندی که هنوز رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
       }
     },
     {
@@ -306,7 +260,7 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const a = $input.first().json;\nconst edited = a.edited ?? '';\nconst m = $('ادغام قاعده‌ها').first().json;\nconst items = (a.issues ?? []).map((s, i) => `${i+1}. ${s}`).join('\\n');\nconst prompt =\n  'این متن یک بار ویراسته شده ولی بازبین هنوز این ایرادها را گزارش کرده:\\n'\n  + items + '\\n\\nفقط همین ایرادها را اصلاح کن؛ بقیهٔ متن را دست نزن. '\n  + 'فقط متن نهایی را برگردان، بدون هیچ توضیحی.\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن:\\n${edited}`;\nreturn [{ json: { prompt } }];"
+        "jsCode": "const a = $input.first().json;\nconst edited = a.edited ?? '';\nconst m = $('deep_rules').first().json;\nconst items = (a.issues ?? []).map((s, i) => `${i+1}. ${s}`).join('\\n');\nconst prompt =\n  'این متن یک بار ویراسته شده ولی بازبین هنوز این ایرادها را گزارش کرده:\\n'\n  + items + '\\n\\nفقط همین ایرادها را اصلاح کن؛ بقیهٔ متن را دست نزن. '\n  + 'فقط متن نهایی را برگردان، بدون هیچ توضیحی.\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن:\\n${edited}`;\nreturn [{ json: { prompt } }];"
       }
     },
     {
@@ -337,7 +291,7 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('ادغام قاعده‌ها').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج. '\n  + 'هر بندی که هنوز رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
+        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('deep_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج. '\n  + 'هر بندی که هنوز رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
       }
     },
     {
@@ -414,7 +368,7 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const a = $input.first().json;\nconst edited = a.edited ?? '';\nconst m = $('ادغام قاعده‌ها').first().json;\nconst items = (a.issues ?? []).map((s, i) => `${i+1}. ${s}`).join('\\n');\nconst prompt =\n  'این متن یک بار ویراسته شده ولی بازبین هنوز این ایرادها را گزارش کرده:\\n'\n  + items + '\\n\\nفقط همین ایرادها را اصلاح کن؛ بقیهٔ متن را دست نزن. '\n  + 'فقط متن نهایی را برگردان، بدون هیچ توضیحی.\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن:\\n${edited}`;\nreturn [{ json: { prompt } }];"
+        "jsCode": "const a = $input.first().json;\nconst edited = a.edited ?? '';\nconst m = $('deep_rules').first().json;\nconst items = (a.issues ?? []).map((s, i) => `${i+1}. ${s}`).join('\\n');\nconst prompt =\n  'این متن یک بار ویراسته شده ولی بازبین هنوز این ایرادها را گزارش کرده:\\n'\n  + items + '\\n\\nفقط همین ایرادها را اصلاح کن؛ بقیهٔ متن را دست نزن. '\n  + 'فقط متن نهایی را برگردان، بدون هیچ توضیحی.\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن:\\n${edited}`;\nreturn [{ json: { prompt } }];"
       }
     },
     {
@@ -445,7 +399,7 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('ادغام قاعده‌ها').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج. '\n  + 'هر بندی که هنوز رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
+        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('deep_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج. '\n  + 'هر بندی که هنوز رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
       }
     },
     {
@@ -539,7 +493,7 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const final = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('ادغام قاعده‌ها').first().json;\nconst prev = $('دریافت متن فارسی').first().json;\nlet passes = 1;\nfor (const n of ['ویراستار ۲', 'ویراستار ۳', 'ویراستار ۴']) {\n  try { const it = $(n).first(); if (it && it.json) passes++; } catch (e) { break; }\n}\nreturn [{ json: { text: final, task_type: prev.task_type ?? '', rules_used: m.rules_count ?? 0, passes } }];"
+        "jsCode": "const final = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('deep_rules').first().json;\nconst prev = $('دریافت متن فارسی').first().json;\nlet passes = 1;\nfor (const n of ['ویراستار ۲', 'ویراستار ۳', 'ویراستار ۴']) {\n  try { const it = $(n).first(); if (it && it.json) passes++; } catch (e) { break; }\n}\nreturn [{ json: { text: final, task_type: prev.task_type ?? '', rules_used: m.rules_count ?? 0, passes } }];"
       }
     },
     {
@@ -556,6 +510,42 @@
         "responseBody": "={{ $json }}",
         "options": {}
       }
+    },
+    {
+      "id": "mcp-deep",
+      "name": "deep_rules",
+      "type": "n8n-nodes-mcp.mcpClient",
+      "typeVersion": "1",
+      "position": [
+        920,
+        200
+      ],
+      "parameters": {
+        "connectionType": "http",
+        "uriOverride": "http://localhost:8060/mcp",
+        "headersOverride": "{\"Authorization\": \"Bearer <PUT-API-KEY-HERE>\"}",
+        "operation": "executeTool",
+        "toolName": "deep_rules",
+        "toolParameters": "{\n  \"task_type\": \"={{ $json.task_type }}\",\n  \"per_dim\": 8\n}"
+      }
+    },
+    {
+      "id": "mcp-deep",
+      "name": "deep_rules",
+      "type": "n8n-nodes-mcp.mcpClient",
+      "typeVersion": "1",
+      "position": [
+        920,
+        200
+      ],
+      "parameters": {
+        "connectionType": "http",
+        "uriOverride": "http://localhost:8060/mcp",
+        "headersOverride": "{\"Authorization\": \"Bearer <PUT-API-KEY-HERE>\"}",
+        "operation": "executeTool",
+        "toolName": "deep_rules",
+        "toolParameters": "{\n  \"task_type\": \"={{ $json.task_type }}\",\n  \"per_dim\": 8\n}"
+      }
     }
   ],
   "connections": {
@@ -563,40 +553,7 @@
       "main": [
         [
           {
-            "node": "فهرست پرس‌وجوها",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "فهرست پرس‌وجوها": {
-      "main": [
-        [
-          {
-            "node": "rule_pack",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "rule_pack": {
-      "main": [
-        [
-          {
-            "node": "ادغام قاعده‌ها",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "ادغام قاعده‌ها": {
-      "main": [
-        [
-          {
-            "node": "پرامپت پاس ۱",
+            "node": "deep_rules",
             "type": "main",
             "index": 0
           }
@@ -943,6 +900,17 @@
         [
           {
             "node": "پاسخ نهایی",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "deep_rules": {
+      "main": [
+        [
+          {
+            "node": "پرامپت پاس ۱",
             "type": "main",
             "index": 0
           }
