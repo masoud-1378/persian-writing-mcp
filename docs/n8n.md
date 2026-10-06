@@ -1,83 +1,90 @@
-# Using obsidian-persian-mcp with n8n
+# اتصال به n8n
 
-Two ways to connect n8n to this server. **HTTP is recommended** — it works
-whether n8n runs on the same machine, in Docker, or in n8n Cloud.
+دو راه برای وصل کردن n8n به این سرور هست. **HTTP پیشنهاد می‌شود**؛
+فرقی نمی‌کند n8n روی همان ماشین باشد، داخل داکر یا روی n8n Cloud.
 
-## 1. Start the server (HTTP)
+## ۱. اجرای سرور (HTTP)
 
 ```bash
-export OP_MCP_API_KEY='a-long-random-secret'
+export OP_MCP_API_KEY='یک-کلید-طولانی-و-تصادفی'
 obper-mcp --transport streamable-http --host 0.0.0.0 --port 8060
 ```
 
-Or with Docker (build from the workspace root; the vault is bundled in):
+یا با داکر (از ریشهٔ ریپو):
 
 ```bash
-docker build -f mcp-servers/obsidian-persian/Dockerfile -t obsidian-persian-mcp ~/workspace
-docker run -p 8060:8060 -e OP_MCP_API_KEY='a-long-random-secret' obsidian-persian-mcp
+docker build -t persian-writing-mcp .
+docker run -p 8060:8060 -e OP_MCP_API_KEY='یک-کلید-طولانی-و-تصادفی' persian-writing-mcp
 ```
 
-To point at a different vault copy: `-e OP_VAULT_PATH=/data/vault -v /path/to/vault:/data/vault`
-(then run the `reindex` tool once, or mount a matching index via `OP_INDEX_PATH`).
+مسیر `GET /health` بدون کلید پاسخ می‌دهد. همه‌چیز زیر `/mcp`
+به سربرگ `Authorization: Bearer <key>` یا پارامتر `?api_key=<key>` نیاز دارد.
 
-`GET /health` answers without a key (for load balancers). Everything under
-`/mcp` needs `Authorization: Bearer <key>` or `?api_key=<key>`.
+## ۲. ورک‌فلوی ساده: ویراستار تک‌پاس
 
-## 2a. Native node: MCP Client Tool (for an AI editor agent)
+فایل [examples/n8n-fa-editor.json](../examples/n8n-fa-editor.json) را ایمپورت کنید:
 
-n8n ships an **MCP Client Tool** node (AI / Agents category) that consumes an
-external MCP server as tools for an AI Agent:
+وب‌هوک (`POST /fa-edit` با بدنهٔ `{"text": "...", "task_type": "گزارش رسمی"}`)
+→ ابزار `rule_pack` (حداکثر ۱۰ قاعده برای همان نوع متن)
+→ ایجنت ویراستار (قاعده‌ها در پرامپت)
+→ متن ویراسته
 
-1. Add **MCP Client Tool** as a tool sub-node of an **AI Agent**.
-2. Endpoint: `http://<host>:8060/mcp` (use `/sse` if you started the server
-   with `--transport sse`).
-3. Authentication: Bearer → your `OP_MCP_API_KEY`.
-4. Tools: **Selected** — `rule_pack` (the checklist builder), plus `search`,
-   `ruling` and `read_note` if you want the agent to consult the vault live.
+برای ویراستاری روزمره کافی است.
 
-Prompt the agent as a Persian editor: first call `rule_pack` with the text's
-`task_type` (گزارش رسمی، ایمیل اداری، لندینگ، مقاله، کپشن، نامهٔ اداری،
-پروپوزال، خبر، مصاحبه، متن وب، پست شبکهٔ اجتماعی، جواب چت), apply every rule
-in the returned checklist to the input text, then return the edited text.
+## ۳. ورک‌فلوی عمیق: صیقل چندپاسه
 
-## 2b. Community node: deterministic workflow (no AI needed for the checklist)
+فایل [examples/n8n-fa-deep-editor.json](../examples/n8n-fa-deep-editor.json) را ایمپورت کنید.
+این ورک‌فلو برای وقتی است که متن باید تمام‌عیار صیقل بخورد؛
+هزینه و تعداد فراخوانی مدل برایش مهم نیست.
 
-Install `n8n-nodes-mcp` via **Settings → Community nodes**, then use the
-**MCP Client** node with an **Execute Tool** operation:
+### گردآوری قاعده (۶ بُعد)
 
-- **Connection type**: `http` (or `sse`)
-- **URI Override**: `http://<host>:8060/mcp`
-- **Headers Override**: `{"Authorization": "Bearer <your key>"}`
-- **Operation**: Execute Tool → **Tool**: `rule_pack`
-- **Tool parameters** (JSON):
+به‌جای یک فراخوانی، شش پرس‌وجو به `rule_pack` زده می‌شود و نتیجه‌ها
+(با حذف تکراری‌ها) در یک چک‌لیست واحد ادغام می‌شوند؛ معمولاً حدود ۴۰ قاعده:
+
+| پرس‌وجو | پوشش |
+|---|---|
+| نوع متن (مثلاً گزارش رسمی) | چک‌لیست مخصوص همان نوع متن |
+| نیم‌فاصله | رسم‌الخط و نیم‌فاصله |
+| ویرگول و نشانه‌گذاری | نشانه‌گذاری فارسی |
+| ساختار جمله | جمله‌بندی و دستور |
+| انتخاب واژه | واژه‌گزینی درست |
+| لحن متن | یکدستی سبک و لحن |
+
+### حلقهٔ ویراستاری و بازبینی (تا ۴ پاس)
+
+۱. **پاس ۱:** ویراستار متن را با کل چک‌لیست ویراستاری می‌کند.
+۲. **بازبین** (یک ایجنت جداگانه و سخت‌گیر) متن ویراسته را بندبه‌بند
+   با همان چک‌لیست می‌سنجد و فقط JSON برمی‌گرداند:
+   `{"issues": [...], "clean": true/false}`.
+۳. اگر `clean` نباشد، ایرادهای گزارش‌شده به ویراستار برمی‌گردد
+   و فقط همان‌ها اصلاح می‌شود (بقیهٔ متن دست نمی‌خورد).
+۴. این چرخه تا وقتی ادامه دارد که بازبین تمیز اعلام کند
+   یا ۴ پاس ویراستاری تمام شود؛ هر پاس فقط وقتی اجرا می‌شود
+   که پاس قبلی هنوز ایراد داشته باشد.
+
+### خوانش آخر
+
+در پایان، یک ایجنت «خوانش آخر» متن را با چشم خوانندهٔ نهایی می‌خواند:
+ریتم، تکرار، غلط تایپی و گوش بومی؛ اگر جایی گیر کرد، همان‌جا را روان می‌کند.
+
+### خروجی
+
+وب‌هوک این JSON را برمی‌گرداند:
 
 ```json
 {
+  "text": "متن نهایی صیقل‌خورده",
   "task_type": "گزارش رسمی",
-  "max_rules": 10
+  "rules_used": 41,
+  "passes": 3
 }
 ```
 
-`rule_pack` only draws from notes with `status=verified` and returns up to 10
-«عنوان: حکم کوتاه» rules. Feed its output plus the input text into your editor
-agent (or any LLM node) with the instruction to apply every rule.
+## نکته‌ها
 
-An importable example — webhook receives Persian text → `rule_pack` →
-AI editor agent → edited text — lives in
-[`examples/n8n-fa-editor.json`](../examples/n8n-fa-editor.json).
-Import it via **Workflows → ⋯ → Import from file**, then set your API key
-and connect an LLM.
-
-## 2c. STDIO (same machine only)
-
-If n8n runs on the same host as the server, the community node also supports
-`cmd` (STDIO) mode: **Command** = `obper-mcp`, no HTTP needed. Point the vault
-with `OP_VAULT_PATH` in the n8n process environment.
-
-## Security notes
-
-- Never expose the HTTP endpoint to the internet without `OP_MCP_API_KEY`.
-  For public exposure, put it behind TLS (reverse proxy) and keep the key long
-  and random.
-- The server is **read-only by design**, except `reindex` (rebuilds the local
-  search index). It never writes to your notes.
+- در هر دو ورک‌فلو، کلید API را در گرهٔ `rule_pack` (بخش Headers Override) بگذارید.
+- به گرهٔ «مدل زبانی» کردنشیال مدل خودتان را وصل کنید
+  (پیش‌فرض `gpt-4o-mini` است؛ با هر مدل سازگار با OpenAI عوضش کنید).
+- برای به‌روزرسانی دانش، والت را تغییر بدهید و ابزار `reindex` را اجرا کنید؛
+  ورک‌فلوها نیازی به تغییر ندارند.
