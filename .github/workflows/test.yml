@@ -12,3 +12,4 @@ jobs:
           python-version: "3.12"
       - run: pip install -e .
       - run: python tests/test_smoke.py
+      - run: python tests/test_golden.py

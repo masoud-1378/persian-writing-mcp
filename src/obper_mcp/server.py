@@ -134,6 +134,28 @@ def mechanical_pass(text: str) -> dict:
     return core.mechanical_fix(text)
 
 
+@mcp.tool()
+def verify_regression(before_text: str, after_text: str) -> dict:
+    """Objective regression gate: every problem signal diagnosed in the
+    input text must be gone in the output text.
+
+    Pure diagnose() comparison, no LLM. Returns resolved/remaining lists
+    and a boolean ``pass``. This is the pipeline's proof of work —
+    "everything we detected, we fixed."
+    """
+    return core.verify_regression(before_text, after_text)
+
+
+@mcp.tool()
+def diff_report(before_text: str, after_text: str) -> dict:
+    """Deterministic change ledger: every span the pipeline changed.
+
+    Word-level diff with context. Lets any human audit exactly what the
+    system did to the text, without trusting the model's own account.
+    """
+    return core.diff_report(before_text, after_text)
+
+
 class _ApiKeyMiddleware(BaseHTTPMiddleware):
     """Bearer / ?api_key gate for the HTTP transports. /health stays open."""
 

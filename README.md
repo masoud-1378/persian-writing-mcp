@@ -90,6 +90,11 @@ obper-mcp --transport sse --port 8060 --api-key SECRET                  # حال
 پرامپت آمادهٔ کپی، نمونه‌کد API و راهنمای اتصال به Claude Desktop و Cursor در
 [docs/deep-edit.md](docs/deep-edit.md) است.
 
+معماری حرفه‌ای: نقش‌ها جدا (ویراستار ≠ نمونه‌خوانِ مستقل با قوی‌ترین مدل)،
+دروازه‌های عینیِ بدونِ مدل در پایان (`mechanical_pass`، `verify_regression`،
+`diff_report`)، و کیفیتِ اندازه‌گیری‌شده با مجموعهٔ طلایی در CI. اگر دروازه‌ای
+نگیرد، خروجی با پرچم `needs_human_review` برمی‌گردد.
+
 برای n8n دو ورک‌فلوی آمادهٔ ایمپورت هست (راهنما: [docs/n8n.md](docs/n8n.md)):
 
 - [examples/n8n-fa-editor.json](examples/n8n-fa-editor.json): ویراستار تک‌پاس؛ برای کار روزمره.

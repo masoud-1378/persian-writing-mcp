@@ -489,3 +489,67 @@ def mechanical_fix(text: str) -> dict:
         remaining.append("«می/نمی» جدا از فعل")
     return {"fixed": t, "fixes": fixes,
             "remaining": remaining, "clean": not remaining}
+
+
+# ---------------------------------------------------------------------------
+# Professional quality gates: objective, model-independent checks.
+# These don't "judge" — they measure. A gate either passes or it doesn't.
+
+# Signals that are real problems (must be resolved). The rest (quotes, numbers,
+# percent, english words, questions) are context: they select rules, they are
+# not errors.
+PROBLEM_SIGNALS = {"long_sentence", "bureaucratic", "passive", "passive_freq",
+                   "arabic_chars", "latin_punct", "zwnj", "cliche",
+                   "repetition", "long_para", "no_para"}
+
+
+def verify_regression(before: str, after: str) -> dict:
+    """Objective regression gate: every problem signal found in `before`
+    must be gone in `after`.
+
+    No LLM involved: pure diagnose() comparison. This is the closest thing
+    to a guarantee the pipeline offers — "everything we detected, we fixed,
+    and here is the proof."
+    """
+    b = {s["signal"]: s for s in diagnose(before)
+         if s["signal"] in PROBLEM_SIGNALS}
+    a = {s["signal"]: s for s in diagnose(after)
+         if s["signal"] in PROBLEM_SIGNALS}
+    resolved = [{"signal": sid, "evidence": s["evidence"]}
+                for sid, s in b.items() if sid not in a]
+    remaining = [{"signal": sid, "before": s["evidence"],
+                  "after": a[sid]["evidence"]}
+                 for sid, s in b.items() if sid in a]
+    return {"resolved": resolved, "remaining": remaining,
+            "pass": not remaining,
+            "resolved_count": len(resolved),
+            "remaining_count": len(remaining),
+            "signals_before": len(b)}
+
+
+def diff_report(before: str, after: str, context: int = 4,
+                max_changes: int = 60) -> dict:
+    """Deterministic change ledger: every span the pipeline changed.
+
+    Word-level diff (stdlib difflib). Traceability without trusting the
+    model: each change is listed with its surrounding context, so any
+    human can audit exactly what the system did to the text.
+    """
+    import difflib
+    bt, at = before.split(), after.split()
+    sm = difflib.SequenceMatcher(None, bt, at, autojunk=False)
+    changes = []
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag == "equal":
+            continue
+        changes.append({
+            "op": {"replace": "جایگزینی", "delete": "حذف",
+                   "insert": "افزودن"}.get(tag, tag),
+            "before": " ".join(bt[i1:i2]) or "—",
+            "after": " ".join(at[j1:j2]) or "—",
+            "context": " ".join(at[max(0, j1 - context):j2 + context]),
+        })
+        if len(changes) >= max_changes:
+            break
+    return {"changed": bool(changes), "change_count": len(changes),
+            "changes": changes}

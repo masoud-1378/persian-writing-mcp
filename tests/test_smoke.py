@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Smoke tests for obsidian-persian-mcp.
 
-Covers all 9 tools over stdio, the HTTP transport (auth positive/negative),
+Covers all 11 tools over stdio, the HTTP transport (auth positive/negative),
 and the /health endpoint. Run with the search-console venv python:
 
     ~/workspace/mcp-servers/search-console/.venv/bin/python tests/test_smoke.py
@@ -72,6 +72,11 @@ async def stdio_tools():
                 "task_type": "گزارش رسمی", "max_rules": 60})
             out["mechanical_pass"] = await call("mechanical_pass", {
                 "text": 'اين متن,دارای "نقل قول" است و می شود خواند؟ 100% تضمینی.'})
+            out["verify_regression"] = await call("verify_regression", {
+                "before_text": "این گزارش می‌باشد که توسط تیم تهیه گردیده است.",
+                "after_text": "این گزارش را تیم تهیه کرده است."})
+            out["diff_report"] = await call("diff_report", {
+                "before_text": "این گزارش می‌باشد.", "after_text": "این گزارش است."})
     return out
 
 
@@ -94,10 +99,10 @@ def http_request(method, path, key=None, data=None):
 
 
 def main():
-    # ---- stdio: all 9 tools ----
+    # ---- stdio: all 11 tools ----
     out = asyncio.run(stdio_tools())
-    check("stdio tools listed (9)", out["tool_names"] == sorted(
-        ["search", "read_note", "map_vault", "reindex", "ruling", "rule_pack", "deep_rules", "smart_rules", "mechanical_pass"]),
+    check("stdio tools listed (11)", out["tool_names"] == sorted(
+        ["search", "read_note", "map_vault", "reindex", "ruling", "rule_pack", "deep_rules", "smart_rules", "mechanical_pass", "verify_regression", "diff_report"]),
         str(out["tool_names"]))
     check("search returns hits", len(out["search"].get("hits", [])) > 0)
     check("read_note returns text", len(out["read_note"].get("text", "")) > 100)
@@ -125,6 +130,12 @@ def main():
           and len(mp.get("fixes", [])) >= 3, mp["fixed"][:80])
     check("mechanical_pass is idempotent", mp.get("clean") is True and mp.get("remaining") == [],
           str(mp.get("remaining")))
+    vr = out["verify_regression"]
+    check("verify_regression proves fixes", vr.get("pass") is True and vr.get("resolved_count", 0) > 0,
+          str(vr))
+    df = out["diff_report"]
+    check("diff_report lists changes", df.get("changed") is True and df.get("change_count", 0) > 0,
+          str(df.get("change_count")))
 
     # ---- HTTP transport ----
     proc = subprocess.Popen(

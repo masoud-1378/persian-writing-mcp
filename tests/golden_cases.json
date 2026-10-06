@@ -1,0 +1,116 @@
+[
+ {
+  "expect_mechanical_clean": true,
+  "expect_signals": [
+   "bureaucratic",
+   "passive",
+   "cliche",
+   "zwnj"
+  ],
+  "id": "fa-01",
+  "task_type": "گزارش رسمی",
+  "text": "در دنیای امروز، این گزارش می‌باشد که توسط تیم ما تهیه گردیده است و لذا جهت استحضار مدیریت ارسال می شود."
+ },
+ {
+  "expect_mechanical_clean": true,
+  "expect_signals": [
+   "arabic_chars",
+   "latin_punct"
+  ],
+  "id": "fa-02",
+  "task_type": "گزارش رسمی",
+  "text": "اين متن شامل حروف عربی است, و از ويرگول لاتین و \"نقل قول\" انگلیسی استفاده می کند. درصد موفقیت 100% است."
+ },
+ {
+  "expect_mechanical_clean": true,
+  "expect_signals": [
+   "long_sentence"
+  ],
+  "id": "fa-03",
+  "task_type": "مقاله",
+  "text": "این جمله بسیار طولانی است که بیش از حد ادامه پیدا می‌کند و خواننده را خسته می‌کند چون هیچ نقطه‌ای در آن دیده نمی‌شود و همین‌طور ادامه دارد تا جایی که دیگر کسی نمی‌فهمد اصلاً موضوع چه بود و چرا این‌همه کلمه پشت سر هم آمده است بدون هیچ توقفی."
+ },
+ {
+  "expect_mechanical_clean": true,
+  "expect_signals": [
+   "bureaucratic",
+   "passive",
+   "questions"
+  ],
+  "id": "fa-04",
+  "task_type": "ایمیل اداری",
+  "text": "با سلام، به استحضار می‌رساند که جلسه‌ای که قرار بود برگزار شود توسط دبیرخانه لغو گردیده است؟ لطفاً اطلاع‌رسانی شود."
+ },
+ {
+  "expect_mechanical_clean": true,
+  "expect_signals": [
+   "cliche",
+   "repetition"
+  ],
+  "id": "fa-05",
+  "task_type": "خبر",
+  "text": "شایان ذکر است که این خبر بسیار مهم است و بسیار جالب است و بسیار خواندنی است و بسیار تازه است."
+ },
+ {
+  "expect_mechanical_clean": true,
+  "expect_signals": [],
+  "id": "fa-06",
+  "task_type": "متن وب",
+  "text": "این متن کاملاً تمیز است و هیچ ایراد مکانیکی ندارد؛ فقط برای کنترل کیفیت این‌جا آمده است."
+ },
+ {
+  "expect_mechanical_clean": true,
+  "expect_signals": [
+   "numbers",
+   "zwnj"
+  ],
+  "id": "fa-07",
+  "task_type": "گزارش رسمی",
+  "text": "عدد فروش ۱۲۳۴۵ واحد بود و رشد ۷.۵ درصدی داشتیم؛ جلسه ساعت ۱۴ برگزار می شود."
+ },
+ {
+  "expect_mechanical_clean": true,
+  "expect_signals": [],
+  "id": "fa-08",
+  "task_type": "کپشن",
+  "text": "این کپشن درباره‌ی محصول جدید ماست که واقعاً عالیه! نظرتون رو برامون بنویسید."
+ },
+ {
+  "expect_mechanical_clean": true,
+  "expect_signals": [
+   "zwnj",
+   "questions"
+  ],
+  "id": "fa-09",
+  "task_type": "مقاله",
+  "text": "نمی شود این مسئله را نادیده گرفت؟ به نظر می‌رسد که باید کاری کرد."
+ },
+ {
+  "expect_mechanical_clean": false,
+  "expect_signals": [
+   "zwnj"
+  ],
+  "id": "fa-10",
+  "task_type": "گزارش رسمی",
+  "text": "گزارش سالانه‌ی شرکت — که شامل سه بخش است — هفته‌ی آینده منتشر می شود."
+ },
+ {
+  "expect_mechanical_clean": true,
+  "expect_signals": [
+   "quotes",
+   "questions"
+  ],
+  "id": "fa-11",
+  "task_type": "مصاحبه",
+  "text": "\"به نظر شما مهم‌ترین چالش چیست؟\" خبرنگار پرسید. مدیر گفت: \"بودجه، قطعاً بودجه.\""
+ },
+ {
+  "expect_mechanical_clean": true,
+  "expect_signals": [
+   "bureaucratic"
+  ],
+  "id": "fa-12",
+  "task_type": "لندینگ",
+  "text": "همین حالا ثبت‌نام کنید! فرصت محدود است و ظرفیت در حال تکمیل شدن می‌باشد."
+ }
+]

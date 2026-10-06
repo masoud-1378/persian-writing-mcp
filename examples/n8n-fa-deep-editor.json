@@ -14,7 +14,7 @@
         "color": 4,
         "height": 460,
         "width": 420,
-        "content": "## ویراستار عمیق فارسی\nلایهٔ قطعی + چند پاسِ ویراستاری-بازبینی؛ هیچ ایراد مکانیکی بی‌سروصدا رد نمی‌شود.\n\n۱. سرور: `obper-mcp --transport streamable-http --port 8060 --api-key <KEY>`\n۲. در گره‌های smart_rules / پالایش مکانیکی / دروازهٔ مکانیکی کلید را در Headers Override بگذار\n۳. گره «ابزارهای والت» را باز کن: SSE Endpoint را\n   `http://localhost:8060/mcp/sse` بگذار و توکن Bearer را در Credentials ست کن\n۴. به گره «مدل زبانی» کردنشیال مدل وصل کن\n۵. تست: POST /fa-deep-edit با `{\"text\": \"...\", \"task_type\": \"گزارش رسمی\"}`\n\nجریان: پالایش مکانیکی (رفع قطعی ي/ك، نشانهٔ لاتین، نیم‌فاصله) ← smart_rules\n(معاینهٔ متن و چک‌لیست مخصوص) ← تا ۴ پاس ویراستاری/بازبینی مسلط ← خوانش آخر ←\nدروازهٔ مکانیکی (اگر چیزی مانده باشد، needs_human_review=true برمی‌گردد)."
+        "content": "## ویراستار عمیق فارسی — تحریریهٔ حرفه‌ای\n\nنقش‌ها جدا: ویراستار (مدل سریع) ≠ بازبینِ مستقل (قوی‌ترین مدل + ابزارهای والت)\n\n۱. سرور: `obper-mcp --transport streamable-http --port 8060 --api-key <KEY>`\n۲. در گره‌های MCP کلید را در Headers Override بگذار\n۳. گره «ابزارهای والت»: SSE Endpoint=`http://localhost:8060/mcp/sse` + توکن Bearer\n۴. «مدل بازبین» را قوی‌ترین مدل بگذار (استقلال داور)\n۵. تست: POST /fa-deep-edit با `{\"text\": \"...\", \"task_type\": \"گزارش رسمی\"}`\n\nجریان: پالایش مکانیکی ← smart_rules ← تا ۴ پاس (ویراستاری/بازبینی مسلط) ←\nخوانش آخر ← دروازهٔ مکانیکی ← دروازهٔ رگرسیون (هر سیگنال ورودی باید حل شده باشد)\n← گزارش کیفیت. اگر دروازه‌ای نگیرد، needs_human_review=true."
       }
     },
     {
@@ -443,12 +443,12 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": "2",
       "position": [
-        3340,
+        3560,
         200
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const g = $input.first().json;\nconst final = g.fixed ?? g.output ?? g.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prev = $('دریافت متن فارسی').first().json;\nlet passes = 1;\nfor (const n of ['ویراستار ۲', 'ویراستار ۳', 'ویراستار ۴']) {\n  try { const it = $(n).first(); if (it && it.json) passes++; } catch (e) { break; }\n}\nconst gateClean = g.clean ?? true;\nreturn [{ json: { text: final, task_type: prev.task_type ?? '', rules_used: m.rules_count ?? 0, passes, mechanical_clean: gateClean, mechanical_remaining: g.remaining ?? [], needs_human_review: !gateClean } }];"
+        "jsCode": "const g = $input.first().json;\nconst final = g.fixed ?? g.output ?? g.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prev = $('دریافت متن فارسی').first().json;\nconst reg = $('دروازهٔ رگرسیون').first().json;\nlet passes = 1;\nfor (const n of ['ویراستار ۲', 'ویراستار ۳', 'ویراستار ۴']) {\n  try { const it = $(n).first(); if (it && it.json) passes++; } catch (e) { break; }\n}\nconst mechClean = g.clean ?? true;\nconst regPass = reg.pass ?? false;\nreturn [{ json: {\n  text: final,\n  task_type: prev.task_type ?? '',\n  rules_used: m.rules_count ?? 0,\n  passes,\n  mechanical_clean: mechClean,\n  regression_pass: regPass,\n  regression_resolved: reg.resolved_count ?? 0,\n  regression_remaining: reg.remaining ?? [],\n  needs_human_review: !mechClean || !regPass\n} }];"
       }
     },
     {
@@ -457,7 +457,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": "1.1",
       "position": [
-        3560,
+        3780,
         200
       ],
       "parameters": {
@@ -552,6 +552,43 @@
         "toolName": "mechanical_pass",
         "toolParameters": "{\n  \"text\": \"={{ $json.output }}\"\n}"
       }
+    },
+    {
+      "id": "lm-2",
+      "name": "مدل بازبین",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": "1.2",
+      "position": [
+        1080,
+        1400
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o"
+        },
+        "options": {},
+        "notes": "مدل بازبین را قوی‌ترین مدل بگذار؛ داور باید از سازنده مستقل و قوی‌تر باشد."
+      }
+    },
+    {
+      "id": "mcp-reg",
+      "name": "دروازهٔ رگرسیون",
+      "type": "n8n-nodes-mcp.mcpClient",
+      "typeVersion": "1",
+      "position": [
+        3340,
+        200
+      ],
+      "parameters": {
+        "connectionType": "http",
+        "uriOverride": "http://localhost:8060/mcp",
+        "headersOverride": "{\"Authorization\": \"Bearer <PUT-API-KEY-HERE>\"}",
+        "operation": "executeTool",
+        "toolName": "verify_regression",
+        "toolParameters": "{\n  \"before_text\": \"={{ $('دریافت متن فارسی').first().json.text }}\",\n  \"after_text\": \"={{ $json.fixed }}\"\n}"
+      }
     }
   ],
   "connections": {
@@ -612,7 +649,7 @@
       "ai_languageModel": [
         [
           {
-            "node": "مدل زبانی",
+            "node": "مدل بازبین",
             "type": "ai_languageModel",
             "index": 0
           }
@@ -712,7 +749,7 @@
       "ai_languageModel": [
         [
           {
-            "node": "مدل زبانی",
+            "node": "مدل بازبین",
             "type": "ai_languageModel",
             "index": 0
           }
@@ -812,7 +849,7 @@
       "ai_languageModel": [
         [
           {
-            "node": "مدل زبانی",
+            "node": "مدل بازبین",
             "type": "ai_languageModel",
             "index": 0
           }
@@ -917,6 +954,15 @@
             "index": 0
           }
         ]
+      ],
+      "ai_languageModel": [
+        [
+          {
+            "node": "مدل بازبین",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
       ]
     },
     "گزارش نهایی": {
@@ -953,6 +999,17 @@
       ]
     },
     "دروازهٔ مکانیکی": {
+      "main": [
+        [
+          {
+            "node": "دروازهٔ رگرسیون",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "دروازهٔ رگرسیون": {
       "main": [
         [
           {
