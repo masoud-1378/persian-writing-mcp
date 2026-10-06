@@ -313,6 +313,7 @@ SIGNAL_QUERIES = {
     "english": ["وام‌واژه", "معادل‌سازی"],
     "cliche": ["کلیشه", "شروع متن"],
     "repetition": ["تکرار واژه"],
+    "repeat_starts": ["تنوع ساخت جمله", "ریتم نثر"],
     "long_para": ["پاراگراف", "بندبندی"],
     "no_para": ["پاراگراف", "بندبندی"],
     "questions": ["علامت سؤال"],
@@ -393,6 +394,15 @@ def diagnose(text: str) -> list:
         add("no_para", 2, "متن تک‌بندِ بلند")
     if "؟" in t:
         add("questions", 1, "جملهٔ پرسشی در متن")
+
+    starts = [s.split()[0] for s in sents if s.split()]
+    run, best = 1, 1
+    for i in range(1, len(starts)):
+        run = run + 1 if starts[i] == starts[i - 1] else 1
+        best = max(best, run)
+    if best >= 3:
+        add("repeat_starts", 2, f"{best} جملهٔ پیاپی با شروع یکسان (یکنواختی ریتم)")
+
     return out
 
 
@@ -404,6 +414,9 @@ def smart_rules_for(text: str, task_type: str, max_rules: int = 60,
     Layer 2 (diagnosis-driven): for each detected risk signal, run its
     targeted queries and add the best verified notes, ordered by signal
     weight. Every rule carries ``why`` — the evidence that selected it.
+    Layer 3 (always-on deep review): cohesion, rhythm, paragraph unity and
+    structure are checked for EVERY text — a professional editor never skips
+    them just because the orthography is clean.
     """
     diag = diagnose(text)
     seen: dict[str, dict] = {}
@@ -411,6 +424,11 @@ def smart_rules_for(text: str, task_type: str, max_rules: int = 60,
     for r in base["rules"]:
         if r["id"] not in seen:
             seen[r["id"]] = {**r, "why": f"چک‌لیست پایهٔ «{task_type}»"}
+    for dq in ("انسجام معنایی بند", "ریتم نثر",
+               "پاراگراف و وحدت موضوع", "ممیزی ساختار"):
+        for r in rule_pack_for(dq, 2)["rules"]:
+            if r["id"] not in seen and len(seen) < max_rules:
+                seen[r["id"]] = {**r, "why": "بازبینی عمیق همیشگی"}
     for sig in sorted(diag, key=lambda s: -s["weight"]):
         for q in sig["queries"]:
             pack = rule_pack_for(q, per_query)

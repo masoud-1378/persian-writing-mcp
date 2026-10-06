@@ -46,6 +46,9 @@ def main():
         sr = core.smart_rules_for(text, c.get("task_type", "متن وب"))
         check(f"{cid} smart checklist", sr["rules_count"] > 0 and
               all(r.get("why") for r in sr["rules"]), f"n={sr['rules_count']}")
+        deep_n = sum(1 for r in sr["rules"] if r.get("why") == "بازبینی عمیق همیشگی")
+        check(f"{cid} always-on deep layer", deep_n >= 3,
+              f"only {deep_n} deep rules in checklist")
 
         for w in c.get("expect_mechanical_unchanged_words", []):
             check(f"{cid} keeps '{w}'", w in m["fixed"], f"fixer mangled '{w}'")
