@@ -1,1057 +1,1039 @@
 {
-  "name": "ویراستار عمیق فارسی (persian-writing-mcp)",
-  "nodes": [
-    {
-      "id": "sticky-1",
-      "name": "راهنما",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": "1",
-      "position": [
-        0,
-        0
-      ],
-      "parameters": {
-        "color": 4,
-        "height": 460,
-        "width": 420,
-        "content": "## ویراستار عمیق فارسی — تحریریهٔ حرفه‌ای\n\nنقش‌ها جدا: ویراستار (مدل سریع) ≠ بازبینِ مستقل (قوی‌ترین مدل + ابزارهای والت)\n\n۱. سرور: `obper-mcp --transport streamable-http --port 8060 --api-key <KEY>`\n۲. در گره‌های MCP کلید را در Headers Override بگذار\n۳. گره «ابزارهای والت»: SSE Endpoint=`http://localhost:8060/mcp/sse` + توکن Bearer\n۴. «مدل بازبین» را قوی‌ترین مدل بگذار (استقلال داور)\n۵. تست: POST /fa-deep-edit با `{\"text\": \"...\", \"task_type\": \"گزارش رسمی\"}`\n\nجریان: پالایش مکانیکی ← smart_rules ← تا ۴ پاس (ویراستاری/بازبینی مسلط) ←\nخوانش آخر ← دروازهٔ مکانیکی ← دروازهٔ رگرسیون (هر سیگنال ورودی باید حل شده باشد)\n← گزارش کیفیت. اگر دروازه‌ای نگیرد، needs_human_review=true."
-      }
-    },
-    {
-      "id": "wh-1",
-      "name": "دریافت متن فارسی",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": "2",
-      "position": [
-        480,
-        200
-      ],
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "fa-deep-edit",
-        "responseMode": "responseNode",
-        "options": {}
-      }
-    },
-    {
-      "id": "code-p1",
-      "name": "پرامپت پاس ۱",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": "2",
-      "position": [
-        1360,
-        200
-      ],
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const prev = $('دریافت متن فارسی').first().json;\nconst m = $('smart_rules').first().json;\nconst mech = $('پالایش مکانیکی').first().json;\nconst text = mech.fixed ?? prev.text ?? '';\nconst prompt =\n  'متن فارسی زیر را سطر به سطر با تک‌تک بندهای این چک‌لیست ویراستاری کن. '\n  + 'هر بندی که به متن می‌خورد اعمال کن؛ معنا را عوض نکن؛ چیزی کم یا اضافه نکن. '\n  + 'فقط متن نهایی ویراسته را برگردان، بدون هیچ توضیحی.\\n\\n'\n  + `چک‌لیست (${m.rules_count} قاعده):\\n${m.checklist}\\n\\nمتن:\\n${text}`;\nreturn [{ json: { prompt } }];"
-      }
-    },
-    {
-      "id": "ag-e1",
-      "name": "ویراستار ۱",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": "1.8",
-      "position": [
-        1580,
-        200
-      ],
-      "parameters": {
-        "promptType": "define",
-        "text": "={{ $json.prompt }}",
-        "options": {
-          "systemMessage": "تو ویراستار ارشد زبان فارسی هستی؛ مسلط به رسم‌الخط و نیم‌فاصله، نشانه‌گذاری فارسی، دستور زبان، جمله‌بندی، واژه‌گزینی، سبک و لحن. هر جمله را با گوش بومی محک می‌زنی: اگر فارسی‌زبان این‌طور نمی‌گوید، بازنویسی می‌کنی. نشانه‌گذاری فقط فارسی (، ؟ ؛ «»)؛ خط تیرهٔ فرنگی ممنوع؛ رجیستر یکدست."
-        }
-      }
-    },
-    {
-      "id": "code-r1",
-      "name": "آماده‌سازی بازبینی ۱",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": "2",
-      "position": [
-        1800,
-        200
-      ],
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج.\\n'\n  + 'تو به ابزارهای کل والت دسترسی داری (search، ruling، read_note، map_vault): '\n  + 'هرجا شکی داشتی — واژه، نشانه‌گذاری، ساختار جمله، لحن — اول با ابزارها در والت '\n  + 'راستی‌آزمایی کن و بعد قضاوت کن. اگر نمی‌دانی کجا را بگردی، اول map_vault را ببین. '\n  + 'چک‌لیست نقطهٔ شروع است نه سقف؛ اگر ایرادی خارج از چک‌لیست دیدی و والت تأییدش کرد، گزارش بده. '\n  + 'قاعده‌به‌قاعده جلو برو: برای هر بند چک‌لیست جداگانه رأی بده (رعایت شده/نشده) و هیچ بندی را رد نکن. هر بندی که رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
-      }
-    },
-    {
-      "id": "ag-v1",
-      "name": "بازبین ۱",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": "1.8",
-      "position": [
-        2020,
-        200
-      ],
-      "parameters": {
-        "promptType": "define",
-        "text": "={{ $json.prompt }}",
-        "options": {
-          "systemMessage": "تو ویراستار ارشد و بازبین سخت‌گیر زبان فارسی هستی و به کل والت ۱۵۷۷ یادداشتی دسترسی مستقیم داری (ابزارهای search، ruling، read_note، map_vault). کارت مچ‌گیری است، نه تعریف؛ فقط ایراد واقعی و مشخص گزارش می‌کنی و هر شکی را اول با ابزارهای والت راستی‌آزمایی می‌کنی."
-        }
-      }
-    },
-    {
-      "id": "code-a1",
-      "name": "تحلیل بازبینی ۱",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": "2",
-      "position": [
-        2240,
-        200
-      ],
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const raw = $input.first().json.output ?? '';\nlet clean = true, issues = [];\ntry {\n  const m = raw.match(/\\{[\\s\\S]*\\}/);\n  if (m) { const o = JSON.parse(m[0]);\n    issues = Array.isArray(o.issues) ? o.issues : [];\n    clean = o.clean === true && issues.length === 0;\n  }\n} catch (e) { clean = false; issues = ['خروجی بازبین JSON نبود؛ بازبینی دستی لازم است.']; }\nreturn [{ json: { clean, issues } }];"
-      }
-    },
-    {
-      "id": "if-1",
-      "name": "تمیز شد؟ ۱",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": "2",
-      "position": [
-        2460,
-        200
-      ],
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose"
-          },
-          "conditions": [
-            {
-              "id": "c1",
-              "leftValue": "={{ $json.clean }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      }
-    },
-    {
-      "id": "code-f2",
-      "name": "پرامپت اصلاح ۲",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": "2",
-      "position": [
-        1500,
-        440
-      ],
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const a = $input.first().json;\nconst edited = a.edited ?? '';\nconst m = $('smart_rules').first().json;\nconst items = (a.issues ?? []).map((s, i) => `${i+1}. ${s}`).join('\\n');\nconst prompt =\n  'این متن یک بار ویراسته شده ولی بازبین هنوز این ایرادها را گزارش کرده:\\n'\n  + items + '\\n\\nفقط همین ایرادها را اصلاح کن؛ بقیهٔ متن را دست نزن. '\n  + 'فقط متن نهایی را برگردان، بدون هیچ توضیحی.\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن:\\n${edited}`;\nreturn [{ json: { prompt } }];"
-      }
-    },
-    {
-      "id": "ag-e2",
-      "name": "ویراستار ۲",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": "1.8",
-      "position": [
-        1720,
-        440
-      ],
-      "parameters": {
-        "promptType": "define",
-        "text": "={{ $json.prompt }}",
-        "options": {
-          "systemMessage": "تو ویراستار ارشد زبان فارسی هستی؛ مسلط به رسم‌الخط و نیم‌فاصله، نشانه‌گذاری فارسی، دستور زبان، جمله‌بندی، واژه‌گزینی، سبک و لحن. هر جمله را با گوش بومی محک می‌زنی: اگر فارسی‌زبان این‌طور نمی‌گوید، بازنویسی می‌کنی. نشانه‌گذاری فقط فارسی (، ؟ ؛ «»)؛ خط تیرهٔ فرنگی ممنوع؛ رجیستر یکدست."
-        }
-      }
-    },
-    {
-      "id": "code-r2",
-      "name": "آماده‌سازی بازبینی ۲",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": "2",
-      "position": [
-        1940,
-        440
-      ],
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج.\\n'\n  + 'تو به ابزارهای کل والت دسترسی داری (search، ruling، read_note، map_vault): '\n  + 'هرجا شکی داشتی — واژه، نشانه‌گذاری، ساختار جمله، لحن — اول با ابزارها در والت '\n  + 'راستی‌آزمایی کن و بعد قضاوت کن. اگر نمی‌دانی کجا را بگردی، اول map_vault را ببین. '\n  + 'چک‌لیست نقطهٔ شروع است نه سقف؛ اگر ایرادی خارج از چک‌لیست دیدی و والت تأییدش کرد، گزارش بده. '\n  + 'قاعده‌به‌قاعده جلو برو: برای هر بند چک‌لیست جداگانه رأی بده (رعایت شده/نشده) و هیچ بندی را رد نکن. هر بندی که رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
-      }
-    },
-    {
-      "id": "ag-v2",
-      "name": "بازبین ۲",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": "1.8",
-      "position": [
-        2160,
-        440
-      ],
-      "parameters": {
-        "promptType": "define",
-        "text": "={{ $json.prompt }}",
-        "options": {
-          "systemMessage": "تو ویراستار ارشد و بازبین سخت‌گیر زبان فارسی هستی و به کل والت ۱۵۷۷ یادداشتی دسترسی مستقیم داری (ابزارهای search، ruling، read_note، map_vault). کارت مچ‌گیری است، نه تعریف؛ فقط ایراد واقعی و مشخص گزارش می‌کنی و هر شکی را اول با ابزارهای والت راستی‌آزمایی می‌کنی."
-        }
-      }
-    },
-    {
-      "id": "code-a2",
-      "name": "تحلیل بازبینی ۲",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": "2",
-      "position": [
-        2380,
-        440
-      ],
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const raw = $input.first().json.output ?? '';\nlet clean = true, issues = [];\ntry {\n  const m = raw.match(/\\{[\\s\\S]*\\}/);\n  if (m) { const o = JSON.parse(m[0]);\n    issues = Array.isArray(o.issues) ? o.issues : [];\n    clean = o.clean === true && issues.length === 0;\n  }\n} catch (e) { clean = false; issues = ['خروجی بازبین JSON نبود؛ بازبینی دستی لازم است.']; }\nreturn [{ json: { clean, issues } }];"
-      }
-    },
-    {
-      "id": "if-۲",
-      "name": "تمیز شد؟ ۲",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": "2",
-      "position": [
-        2600,
-        440
-      ],
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose"
-          },
-          "conditions": [
-            {
-              "id": "c1",
-              "leftValue": "={{ $json.clean }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      }
-    },
-    {
-      "id": "code-f3",
-      "name": "پرامپت اصلاح ۳",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": "2",
-      "position": [
-        1500,
-        680
-      ],
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const a = $input.first().json;\nconst edited = a.edited ?? '';\nconst m = $('smart_rules').first().json;\nconst items = (a.issues ?? []).map((s, i) => `${i+1}. ${s}`).join('\\n');\nconst prompt =\n  'این متن یک بار ویراسته شده ولی بازبین هنوز این ایرادها را گزارش کرده:\\n'\n  + items + '\\n\\nفقط همین ایرادها را اصلاح کن؛ بقیهٔ متن را دست نزن. '\n  + 'فقط متن نهایی را برگردان، بدون هیچ توضیحی.\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن:\\n${edited}`;\nreturn [{ json: { prompt } }];"
-      }
-    },
-    {
-      "id": "ag-e3",
-      "name": "ویراستار ۳",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": "1.8",
-      "position": [
-        1720,
-        680
-      ],
-      "parameters": {
-        "promptType": "define",
-        "text": "={{ $json.prompt }}",
-        "options": {
-          "systemMessage": "تو ویراستار ارشد زبان فارسی هستی؛ مسلط به رسم‌الخط و نیم‌فاصله، نشانه‌گذاری فارسی، دستور زبان، جمله‌بندی، واژه‌گزینی، سبک و لحن. هر جمله را با گوش بومی محک می‌زنی: اگر فارسی‌زبان این‌طور نمی‌گوید، بازنویسی می‌کنی. نشانه‌گذاری فقط فارسی (، ؟ ؛ «»)؛ خط تیرهٔ فرنگی ممنوع؛ رجیستر یکدست."
-        }
-      }
-    },
-    {
-      "id": "code-r3",
-      "name": "آماده‌سازی بازبینی ۳",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": "2",
-      "position": [
-        1940,
-        680
-      ],
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج.\\n'\n  + 'تو به ابزارهای کل والت دسترسی داری (search، ruling، read_note، map_vault): '\n  + 'هرجا شکی داشتی — واژه، نشانه‌گذاری، ساختار جمله، لحن — اول با ابزارها در والت '\n  + 'راستی‌آزمایی کن و بعد قضاوت کن. اگر نمی‌دانی کجا را بگردی، اول map_vault را ببین. '\n  + 'چک‌لیست نقطهٔ شروع است نه سقف؛ اگر ایرادی خارج از چک‌لیست دیدی و والت تأییدش کرد، گزارش بده. '\n  + 'قاعده‌به‌قاعده جلو برو: برای هر بند چک‌لیست جداگانه رأی بده (رعایت شده/نشده) و هیچ بندی را رد نکن. هر بندی که رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
-      }
-    },
-    {
-      "id": "ag-v3",
-      "name": "بازبین ۳",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": "1.8",
-      "position": [
-        2160,
-        680
-      ],
-      "parameters": {
-        "promptType": "define",
-        "text": "={{ $json.prompt }}",
-        "options": {
-          "systemMessage": "تو ویراستار ارشد و بازبین سخت‌گیر زبان فارسی هستی و به کل والت ۱۵۷۷ یادداشتی دسترسی مستقیم داری (ابزارهای search، ruling، read_note، map_vault). کارت مچ‌گیری است، نه تعریف؛ فقط ایراد واقعی و مشخص گزارش می‌کنی و هر شکی را اول با ابزارهای والت راستی‌آزمایی می‌کنی."
-        }
-      }
-    },
-    {
-      "id": "code-a3",
-      "name": "تحلیل بازبینی ۳",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": "2",
-      "position": [
-        2380,
-        680
-      ],
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const raw = $input.first().json.output ?? '';\nlet clean = true, issues = [];\ntry {\n  const m = raw.match(/\\{[\\s\\S]*\\}/);\n  if (m) { const o = JSON.parse(m[0]);\n    issues = Array.isArray(o.issues) ? o.issues : [];\n    clean = o.clean === true && issues.length === 0;\n  }\n} catch (e) { clean = false; issues = ['خروجی بازبین JSON نبود؛ بازبینی دستی لازم است.']; }\nreturn [{ json: { clean, issues } }];"
-      }
-    },
-    {
-      "id": "if-۳",
-      "name": "تمیز شد؟ ۳",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": "2",
-      "position": [
-        2600,
-        680
-      ],
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose"
-          },
-          "conditions": [
-            {
-              "id": "c1",
-              "leftValue": "={{ $json.clean }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      }
-    },
-    {
-      "id": "code-f4",
-      "name": "پرامپت اصلاح ۴",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": "2",
-      "position": [
-        1500,
-        920
-      ],
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const a = $input.first().json;\nconst edited = a.edited ?? '';\nconst m = $('smart_rules').first().json;\nconst items = (a.issues ?? []).map((s, i) => `${i+1}. ${s}`).join('\\n');\nconst prompt =\n  'این متن یک بار ویراسته شده ولی بازبین هنوز این ایرادها را گزارش کرده:\\n'\n  + items + '\\n\\nفقط همین ایرادها را اصلاح کن؛ بقیهٔ متن را دست نزن. '\n  + 'فقط متن نهایی را برگردان، بدون هیچ توضیحی.\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن:\\n${edited}`;\nreturn [{ json: { prompt } }];"
-      }
-    },
-    {
-      "id": "ag-e4",
-      "name": "ویراستار ۴",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": "1.8",
-      "position": [
-        1720,
-        920
-      ],
-      "parameters": {
-        "promptType": "define",
-        "text": "={{ $json.prompt }}",
-        "options": {
-          "systemMessage": "تو ویراستار ارشد زبان فارسی هستی؛ مسلط به رسم‌الخط و نیم‌فاصله، نشانه‌گذاری فارسی، دستور زبان، جمله‌بندی، واژه‌گزینی، سبک و لحن. هر جمله را با گوش بومی محک می‌زنی: اگر فارسی‌زبان این‌طور نمی‌گوید، بازنویسی می‌کنی. نشانه‌گذاری فقط فارسی (، ؟ ؛ «»)؛ خط تیرهٔ فرنگی ممنوع؛ رجیستر یکدست."
-        }
-      }
-    },
-    {
-      "id": "lm-1",
-      "name": "مدل زبانی",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-      "typeVersion": "1.2",
-      "position": [
-        1080,
-        1180
-      ],
-      "parameters": {
-        "model": {
-          "__rl": true,
-          "mode": "list",
-          "value": "gpt-4o-mini"
-        },
-        "options": {}
-      }
-    },
-    {
-      "id": "ag-f",
-      "name": "خوانش آخر",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": "1.8",
-      "position": [
-        2900,
-        200
-      ],
-      "parameters": {
-        "promptType": "define",
-        "text": "={{ $json.text }}",
-        "options": {
-          "systemMessage": "خوانش آخر با چشم خوانندهٔ نهایی: ریتم، تکرار، غلط تایپی، گوش بومی. اگر جایی گیر کردی، همان‌جا را روان کن."
-        }
-      }
-    },
-    {
-      "id": "code-pre",
-      "name": "آماده‌سازی خوانش آخر",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": "2",
-      "position": [
-        2680,
-        200
-      ],
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const t = $input.first().json.output ?? $input.first().json.text ?? '';\nreturn [{ json: { text: t } }];"
-      }
-    },
-    {
-      "id": "code-rep",
-      "name": "گزارش نهایی",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": "2",
-      "position": [
-        3780,
-        200
-      ],
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const g = $input.first().json;\nconst final = g.fixed ?? g.output ?? g.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prev = $('دریافت متن فارسی').first().json;\nconst reg = $('دروازهٔ رگرسیون').first().json;\nconst ledger = $('دفتر تغییرات').first().json;\nlet passes = 1;\nfor (const n of ['ویراستار ۲', 'ویراستار ۳', 'ویراستار ۴']) {\n  try { const it = $(n).first(); if (it && it.json) passes++; } catch (e) { break; }\n}\nconst mechClean = g.clean ?? true;\nconst regPass = reg.pass ?? false;\nreturn [{ json: {\n  text: final,\n  task_type: prev.task_type ?? '',\n  rules_used: m.rules_count ?? 0,\n  passes,\n  mechanical_clean: mechClean,\n  regression_pass: regPass,\n  regression_resolved: reg.resolved_count ?? 0,\n  regression_remaining: reg.remaining ?? [],\n  change_count: ledger.change_count ?? 0,\n  changes: (ledger.changes ?? []).slice(0, 20),\n  needs_human_review: !mechClean || !regPass\n} }];"
-      }
-    },
-    {
-      "id": "resp-1",
-      "name": "پاسخ نهایی",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": "1.1",
-      "position": [
-        4000,
-        200
-      ],
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ $json }}",
-        "options": {}
-      }
-    },
-    {
-      "id": "mcp-smart",
-      "name": "smart_rules",
-      "type": "n8n-nodes-mcp.mcpClient",
-      "typeVersion": "1",
-      "position": [
-        920,
-        200
-      ],
-      "parameters": {
-        "connectionType": "http",
-        "uriOverride": "http://localhost:8060/mcp",
-        "headersOverride": "{\"Authorization\": \"Bearer <PUT-API-KEY-HERE>\"}",
-        "operation": "executeTool",
-        "toolName": "smart_rules",
-        "toolParameters": "{\n  \"text\": \"={{ $json.fixed }}\",\n  \"task_type\": \"={{ $json.task_type }}\",\n  \"max_rules\": 60\n}"
-      }
-    },
-    {
-      "id": "mcp-smart",
-      "name": "smart_rules",
-      "type": "n8n-nodes-mcp.mcpClient",
-      "typeVersion": "1",
-      "position": [
-        920,
-        200
-      ],
-      "parameters": {
-        "connectionType": "http",
-        "uriOverride": "http://localhost:8060/mcp",
-        "headersOverride": "{\"Authorization\": \"Bearer <PUT-API-KEY-HERE>\"}",
-        "operation": "executeTool",
-        "toolName": "smart_rules",
-        "toolParameters": "{\n  \"text\": \"={{ $json.fixed }}\",\n  \"task_type\": \"={{ $json.task_type }}\",\n  \"max_rules\": 60\n}"
-      }
-    },
-    {
-      "id": "tool-vault",
-      "name": "ابزارهای والت",
-      "type": "@n8n/n8n-nodes-langchain.toolMcpClient",
-      "typeVersion": "1",
-      "position": [
-        1330,
-        1180
-      ],
-      "parameters": {
-        "sseEndpoint": "http://localhost:8060/mcp/sse",
-        "toolsToInclude": "all",
-        "notes": "یک‌بار در n8n بازش کن: SSE Endpoint را چک کن و توکن Bearer را در Credentials بگذار؛ Tools to Include = All."
-      }
-    },
-    {
-      "id": "mcp-mech0",
-      "name": "پالایش مکانیکی",
-      "type": "n8n-nodes-mcp.mcpClient",
-      "typeVersion": "1",
-      "position": [
-        700,
-        200
-      ],
-      "parameters": {
-        "connectionType": "http",
-        "uriOverride": "http://localhost:8060/mcp",
-        "headersOverride": "{\"Authorization\": \"Bearer <PUT-API-KEY-HERE>\"}",
-        "operation": "executeTool",
-        "toolName": "mechanical_pass",
-        "toolParameters": "{\n  \"text\": \"={{ $json.text }}\"\n}"
-      }
-    },
-    {
-      "id": "mcp-mech9",
-      "name": "دروازهٔ مکانیکی",
-      "type": "n8n-nodes-mcp.mcpClient",
-      "typeVersion": "1",
-      "position": [
-        3120,
-        200
-      ],
-      "parameters": {
-        "connectionType": "http",
-        "uriOverride": "http://localhost:8060/mcp",
-        "headersOverride": "{\"Authorization\": \"Bearer <PUT-API-KEY-HERE>\"}",
-        "operation": "executeTool",
-        "toolName": "mechanical_pass",
-        "toolParameters": "{\n  \"text\": \"={{ $json.output }}\"\n}"
-      }
-    },
-    {
-      "id": "lm-2",
-      "name": "مدل بازبین",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-      "typeVersion": "1.2",
-      "position": [
-        1080,
-        1400
-      ],
-      "parameters": {
-        "model": {
-          "__rl": true,
-          "mode": "list",
-          "value": "gpt-4o"
-        },
-        "options": {},
-        "notes": "مدل بازبین را قوی‌ترین مدل بگذار؛ داور باید از سازنده مستقل و قوی‌تر باشد."
-      }
-    },
-    {
-      "id": "mcp-reg",
-      "name": "دروازهٔ رگرسیون",
-      "type": "n8n-nodes-mcp.mcpClient",
-      "typeVersion": "1",
-      "position": [
-        3340,
-        200
-      ],
-      "parameters": {
-        "connectionType": "http",
-        "uriOverride": "http://localhost:8060/mcp",
-        "headersOverride": "{\"Authorization\": \"Bearer <PUT-API-KEY-HERE>\"}",
-        "operation": "executeTool",
-        "toolName": "verify_regression",
-        "toolParameters": "{\n  \"before_text\": \"={{ $('دریافت متن فارسی').first().json.text }}\",\n  \"after_text\": \"={{ $json.fixed }}\"\n}"
-      }
-    },
-    {
-      "id": "mcp-diff",
-      "name": "دفتر تغییرات",
-      "type": "n8n-nodes-mcp.mcpClient",
-      "typeVersion": "1",
-      "position": [
-        3560,
-        200
-      ],
-      "parameters": {
-        "connectionType": "http",
-        "uriOverride": "http://localhost:8060/mcp",
-        "headersOverride": "{\"Authorization\": \"Bearer <PUT-API-KEY-HERE>\"}",
-        "operation": "executeTool",
-        "toolName": "diff_report",
-        "toolParameters": "{\n  \"before_text\": \"={{ $('دریافت متن فارسی').first().json.text }}\",\n  \"after_text\": \"={{ $('دروازهٔ مکانیکی').first().json.fixed }}\"\n}"
-      }
-    }
-  ],
-  "connections": {
-    "دریافت متن فارسی": {
-      "main": [
-        [
-          {
-            "node": "پالایش مکانیکی",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "پرامپت پاس ۱": {
-      "main": [
-        [
-          {
-            "node": "ویراستار ۱",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "ویراستار ۱": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "مدل زبانی",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ],
-      "main": [
-        [
-          {
-            "node": "آماده‌سازی بازبینی ۱",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "آماده‌سازی بازبینی ۱": {
-      "main": [
-        [
-          {
-            "node": "بازبین ۱",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "بازبین ۱": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "مدل بازبین",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ],
-      "main": [
-        [
-          {
-            "node": "تحلیل بازبینی ۱",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ],
-      "ai_tool": [
-        [
-          {
-            "node": "ابزارهای والت",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "تحلیل بازبینی ۱": {
-      "main": [
-        [
-          {
-            "node": "تمیز شد؟ ۱",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "تمیز شد؟ ۱": {
-      "main": [
-        [
-          {
-            "node": "آماده‌سازی خوانش آخر",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "پرامپت اصلاح ۲",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "پرامپت اصلاح ۲": {
-      "main": [
-        [
-          {
-            "node": "ویراستار ۲",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "ویراستار ۲": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "مدل زبانی",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ],
-      "main": [
-        [
-          {
-            "node": "آماده‌سازی بازبینی ۲",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "آماده‌سازی بازبینی ۲": {
-      "main": [
-        [
-          {
-            "node": "بازبین ۲",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "بازبین ۲": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "مدل بازبین",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ],
-      "main": [
-        [
-          {
-            "node": "تحلیل بازبینی ۲",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ],
-      "ai_tool": [
-        [
-          {
-            "node": "ابزارهای والت",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "تحلیل بازبینی ۲": {
-      "main": [
-        [
-          {
-            "node": "تمیز شد؟ ۲",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "تمیز شد؟ ۲": {
-      "main": [
-        [
-          {
-            "node": "آماده‌سازی خوانش آخر",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "پرامپت اصلاح ۳",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "پرامپت اصلاح ۳": {
-      "main": [
-        [
-          {
-            "node": "ویراستار ۳",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "ویراستار ۳": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "مدل زبانی",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ],
-      "main": [
-        [
-          {
-            "node": "آماده‌سازی بازبینی ۳",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "آماده‌سازی بازبینی ۳": {
-      "main": [
-        [
-          {
-            "node": "بازبین ۳",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "بازبین ۳": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "مدل بازبین",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ],
-      "main": [
-        [
-          {
-            "node": "تحلیل بازبینی ۳",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ],
-      "ai_tool": [
-        [
-          {
-            "node": "ابزارهای والت",
-            "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "تحلیل بازبینی ۳": {
-      "main": [
-        [
-          {
-            "node": "تمیز شد؟ ۳",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "تمیز شد؟ ۳": {
-      "main": [
-        [
-          {
-            "node": "آماده‌سازی خوانش آخر",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "پرامپت اصلاح ۴",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "پرامپت اصلاح ۴": {
-      "main": [
-        [
-          {
-            "node": "ویراستار ۴",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "ویراستار ۴": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "مدل زبانی",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ],
-      "main": [
-        [
-          {
-            "node": "آماده‌سازی خوانش آخر",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "آماده‌سازی خوانش آخر": {
-      "main": [
-        [
-          {
-            "node": "خوانش آخر",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "خوانش آخر": {
-      "main": [
-        [
-          {
-            "node": "دروازهٔ مکانیکی",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ],
-      "ai_languageModel": [
-        [
-          {
-            "node": "مدل بازبین",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "گزارش نهایی": {
-      "main": [
-        [
-          {
-            "node": "پاسخ نهایی",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "smart_rules": {
-      "main": [
-        [
-          {
-            "node": "پرامپت پاس ۱",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "پالایش مکانیکی": {
-      "main": [
-        [
-          {
-            "node": "smart_rules",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "دروازهٔ مکانیکی": {
-      "main": [
-        [
-          {
-            "node": "دروازهٔ رگرسیون",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "دروازهٔ رگرسیون": {
-      "main": [
-        [
-          {
-            "node": "دفتر تغییرات",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "دفتر تغییرات": {
-      "main": [
-        [
-          {
-            "node": "گزارش نهایی",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
+ "name": "ویراستار عمیق فارسی (persian-writing-mcp)",
+ "nodes": [
+  {
+   "id": "sticky-1",
+   "name": "راهنما",
+   "type": "n8n-nodes-base.stickyNote",
+   "typeVersion": "1",
+   "position": [
+    0,
+    0
+   ],
+   "parameters": {
+    "color": 4,
+    "height": 460,
+    "width": 420,
+    "content": "## ویراستار عمیق فارسی — تحریریهٔ حرفه‌ای\n\nنقش‌ها جدا: ویراستار (مدل سریع) ≠ بازبینِ مستقل (قوی‌ترین مدل + ابزارهای والت)\n\n۱. سرور: `obper-mcp --transport streamable-http --port 8060 --api-key <KEY>`\n۲. در گره‌های MCP کلید را در Headers Override بگذار\n۳. گره «ابزارهای والت»: SSE Endpoint=`http://localhost:8060/mcp/sse` + توکن Bearer\n۴. «مدل بازبین» را قوی‌ترین مدل بگذار (استقلال داور)\n۵. تست: POST /fa-deep-edit با `{\"text\": \"...\", \"task_type\": \"گزارش رسمی\"}`\n\nجریان: پالایش مکانیکی ← smart_rules ← تا ۴ پاس (ویراستاری/بازبینی مسلط) ←\nخوانش آخر ← دروازهٔ مکانیکی ← دروازهٔ رگرسیون (هر سیگنال ورودی باید حل شده باشد)\n← گزارش کیفیت. اگر دروازه‌ای نگیرد، needs_human_review=true."
+   }
   },
-  "settings": {
-    "executionOrder": "v1"
+  {
+   "id": "wh-1",
+   "name": "دریافت متن فارسی",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": "2",
+   "position": [
+    480,
+    200
+   ],
+   "parameters": {
+    "httpMethod": "POST",
+    "path": "fa-deep-edit",
+    "responseMode": "responseNode",
+    "options": {}
+   }
   },
-  "pinData": {}
+  {
+   "id": "code-p1",
+   "name": "پرامپت پاس ۱",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": "2",
+   "position": [
+    1360,
+    200
+   ],
+   "parameters": {
+    "mode": "runOnceForAllItems",
+    "jsCode": "const prev = $('دریافت متن فارسی').first().json;\nconst m = $('smart_rules').first().json;\nconst mech = $('پالایش مکانیکی').first().json;\nconst text = mech.fixed ?? prev.text ?? '';\nconst prompt =\n  'متن فارسی زیر را سطر به سطر با تک‌تک بندهای این چک‌لیست ویراستاری کن. '\n  + 'هر بندی که به متن می‌خورد اعمال کن؛ معنا را عوض نکن؛ چیزی کم یا اضافه نکن. '\n  + 'فقط متن نهایی ویراسته را برگردان، بدون هیچ توضیحی.\\n\\n'\n  + `چک‌لیست (${m.rules_count} قاعده):\\n${m.checklist}\\n\\nمتن:\\n${text}`;\nreturn [{ json: { prompt } }];"
+   }
+  },
+  {
+   "id": "ag-e1",
+   "name": "ویراستار ۱",
+   "type": "@n8n/n8n-nodes-langchain.agent",
+   "typeVersion": "1.8",
+   "position": [
+    1580,
+    200
+   ],
+   "parameters": {
+    "promptType": "define",
+    "text": "={{ $json.prompt }}",
+    "options": {
+     "systemMessage": "تو ویراستار ارشد زبان فارسی هستی؛ مسلط به رسم‌الخط و نیم‌فاصله، نشانه‌گذاری فارسی، دستور زبان، جمله‌بندی، واژه‌گزینی، سبک و لحن. هر جمله را با گوش بومی محک می‌زنی: اگر فارسی‌زبان این‌طور نمی‌گوید، بازنویسی می‌کنی. نشانه‌گذاری فقط فارسی (، ؟ ؛ «»)؛ خط تیرهٔ فرنگی ممنوع؛ رجیستر یکدست."
+    }
+   }
+  },
+  {
+   "id": "code-r1",
+   "name": "آماده‌سازی بازبینی ۱",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": "2",
+   "position": [
+    1800,
+    200
+   ],
+   "parameters": {
+    "mode": "runOnceForAllItems",
+    "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج.\\n'\n  + 'تو به ابزارهای کل والت دسترسی داری (search، ruling، read_note، map_vault): '\n  + 'هرجا شکی داشتی — واژه، نشانه‌گذاری، ساختار جمله، لحن — اول با ابزارها در والت '\n  + 'راستی‌آزمایی کن و بعد قضاوت کن. اگر نمی‌دانی کجا را بگردی، اول map_vault را ببین. '\n  + 'چک‌لیست نقطهٔ شروع است نه سقف؛ اگر ایرادی خارج از چک‌لیست دیدی و والت تأییدش کرد، گزارش بده. '\n  + 'قاعده‌به‌قاعده جلو برو: برای هر بند چک‌لیست جداگانه رأی بده (رعایت شده/نشده) و هیچ بندی را رد نکن. هر بندی که رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
+   }
+  },
+  {
+   "id": "ag-v1",
+   "name": "بازبین ۱",
+   "type": "@n8n/n8n-nodes-langchain.agent",
+   "typeVersion": "1.8",
+   "position": [
+    2020,
+    200
+   ],
+   "parameters": {
+    "promptType": "define",
+    "text": "={{ $json.prompt }}",
+    "options": {
+     "systemMessage": "تو ویراستار ارشد و بازبین سخت‌گیر زبان فارسی هستی و به کل والت ۱۵۷۷ یادداشتی دسترسی مستقیم داری (ابزارهای search، ruling، read_note، map_vault). کارت مچ‌گیری است، نه تعریف؛ فقط ایراد واقعی و مشخص گزارش می‌کنی و هر شکی را اول با ابزارهای والت راستی‌آزمایی می‌کنی."
+    }
+   }
+  },
+  {
+   "id": "code-a1",
+   "name": "تحلیل بازبینی ۱",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": "2",
+   "position": [
+    2240,
+    200
+   ],
+   "parameters": {
+    "mode": "runOnceForAllItems",
+    "jsCode": "const raw = $input.first().json.output ?? '';\nlet clean = true, issues = [];\ntry {\n  const m = raw.match(/\\{[\\s\\S]*\\}/);\n  if (m) { const o = JSON.parse(m[0]);\n    issues = Array.isArray(o.issues) ? o.issues : [];\n    clean = o.clean === true && issues.length === 0;\n  }\n} catch (e) { clean = false; issues = ['خروجی بازبین JSON نبود؛ بازبینی دستی لازم است.']; }\nreturn [{ json: { clean, issues } }];"
+   }
+  },
+  {
+   "id": "if-1",
+   "name": "تمیز شد؟ ۱",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": "2",
+   "position": [
+    2460,
+    200
+   ],
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "loose"
+     },
+     "conditions": [
+      {
+       "id": "c1",
+       "leftValue": "={{ $json.clean }}",
+       "rightValue": true,
+       "operator": {
+        "type": "boolean",
+        "operation": "true"
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   }
+  },
+  {
+   "id": "code-f2",
+   "name": "پرامپت اصلاح ۲",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": "2",
+   "position": [
+    1500,
+    440
+   ],
+   "parameters": {
+    "mode": "runOnceForAllItems",
+    "jsCode": "const a = $input.first().json;\nconst edited = a.edited ?? '';\nconst m = $('smart_rules').first().json;\nconst items = (a.issues ?? []).map((s, i) => `${i+1}. ${s}`).join('\\n');\nconst prompt =\n  'این متن یک بار ویراسته شده ولی بازبین هنوز این ایرادها را گزارش کرده:\\n'\n  + items + '\\n\\nفقط همین ایرادها را اصلاح کن؛ بقیهٔ متن را دست نزن. '\n  + 'فقط متن نهایی را برگردان، بدون هیچ توضیحی.\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن:\\n${edited}`;\nreturn [{ json: { prompt } }];"
+   }
+  },
+  {
+   "id": "ag-e2",
+   "name": "ویراستار ۲",
+   "type": "@n8n/n8n-nodes-langchain.agent",
+   "typeVersion": "1.8",
+   "position": [
+    1720,
+    440
+   ],
+   "parameters": {
+    "promptType": "define",
+    "text": "={{ $json.prompt }}",
+    "options": {
+     "systemMessage": "تو ویراستار ارشد زبان فارسی هستی؛ مسلط به رسم‌الخط و نیم‌فاصله، نشانه‌گذاری فارسی، دستور زبان، جمله‌بندی، واژه‌گزینی، سبک و لحن. هر جمله را با گوش بومی محک می‌زنی: اگر فارسی‌زبان این‌طور نمی‌گوید، بازنویسی می‌کنی. نشانه‌گذاری فقط فارسی (، ؟ ؛ «»)؛ خط تیرهٔ فرنگی ممنوع؛ رجیستر یکدست."
+    }
+   }
+  },
+  {
+   "id": "code-r2",
+   "name": "آماده‌سازی بازبینی ۲",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": "2",
+   "position": [
+    1940,
+    440
+   ],
+   "parameters": {
+    "mode": "runOnceForAllItems",
+    "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج.\\n'\n  + 'تو به ابزارهای کل والت دسترسی داری (search، ruling، read_note، map_vault): '\n  + 'هرجا شکی داشتی — واژه، نشانه‌گذاری، ساختار جمله، لحن — اول با ابزارها در والت '\n  + 'راستی‌آزمایی کن و بعد قضاوت کن. اگر نمی‌دانی کجا را بگردی، اول map_vault را ببین. '\n  + 'چک‌لیست نقطهٔ شروع است نه سقف؛ اگر ایرادی خارج از چک‌لیست دیدی و والت تأییدش کرد، گزارش بده. '\n  + 'قاعده‌به‌قاعده جلو برو: برای هر بند چک‌لیست جداگانه رأی بده (رعایت شده/نشده) و هیچ بندی را رد نکن. هر بندی که رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
+   }
+  },
+  {
+   "id": "ag-v2",
+   "name": "بازبین ۲",
+   "type": "@n8n/n8n-nodes-langchain.agent",
+   "typeVersion": "1.8",
+   "position": [
+    2160,
+    440
+   ],
+   "parameters": {
+    "promptType": "define",
+    "text": "={{ $json.prompt }}",
+    "options": {
+     "systemMessage": "تو ویراستار ارشد و بازبین سخت‌گیر زبان فارسی هستی و به کل والت ۱۵۷۷ یادداشتی دسترسی مستقیم داری (ابزارهای search، ruling، read_note، map_vault). کارت مچ‌گیری است، نه تعریف؛ فقط ایراد واقعی و مشخص گزارش می‌کنی و هر شکی را اول با ابزارهای والت راستی‌آزمایی می‌کنی."
+    }
+   }
+  },
+  {
+   "id": "code-a2",
+   "name": "تحلیل بازبینی ۲",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": "2",
+   "position": [
+    2380,
+    440
+   ],
+   "parameters": {
+    "mode": "runOnceForAllItems",
+    "jsCode": "const raw = $input.first().json.output ?? '';\nlet clean = true, issues = [];\ntry {\n  const m = raw.match(/\\{[\\s\\S]*\\}/);\n  if (m) { const o = JSON.parse(m[0]);\n    issues = Array.isArray(o.issues) ? o.issues : [];\n    clean = o.clean === true && issues.length === 0;\n  }\n} catch (e) { clean = false; issues = ['خروجی بازبین JSON نبود؛ بازبینی دستی لازم است.']; }\nreturn [{ json: { clean, issues } }];"
+   }
+  },
+  {
+   "id": "if-۲",
+   "name": "تمیز شد؟ ۲",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": "2",
+   "position": [
+    2600,
+    440
+   ],
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "loose"
+     },
+     "conditions": [
+      {
+       "id": "c1",
+       "leftValue": "={{ $json.clean }}",
+       "rightValue": true,
+       "operator": {
+        "type": "boolean",
+        "operation": "true"
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   }
+  },
+  {
+   "id": "code-f3",
+   "name": "پرامپت اصلاح ۳",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": "2",
+   "position": [
+    1500,
+    680
+   ],
+   "parameters": {
+    "mode": "runOnceForAllItems",
+    "jsCode": "const a = $input.first().json;\nconst edited = a.edited ?? '';\nconst m = $('smart_rules').first().json;\nconst items = (a.issues ?? []).map((s, i) => `${i+1}. ${s}`).join('\\n');\nconst prompt =\n  'این متن یک بار ویراسته شده ولی بازبین هنوز این ایرادها را گزارش کرده:\\n'\n  + items + '\\n\\nفقط همین ایرادها را اصلاح کن؛ بقیهٔ متن را دست نزن. '\n  + 'فقط متن نهایی را برگردان، بدون هیچ توضیحی.\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن:\\n${edited}`;\nreturn [{ json: { prompt } }];"
+   }
+  },
+  {
+   "id": "ag-e3",
+   "name": "ویراستار ۳",
+   "type": "@n8n/n8n-nodes-langchain.agent",
+   "typeVersion": "1.8",
+   "position": [
+    1720,
+    680
+   ],
+   "parameters": {
+    "promptType": "define",
+    "text": "={{ $json.prompt }}",
+    "options": {
+     "systemMessage": "تو ویراستار ارشد زبان فارسی هستی؛ مسلط به رسم‌الخط و نیم‌فاصله، نشانه‌گذاری فارسی، دستور زبان، جمله‌بندی، واژه‌گزینی، سبک و لحن. هر جمله را با گوش بومی محک می‌زنی: اگر فارسی‌زبان این‌طور نمی‌گوید، بازنویسی می‌کنی. نشانه‌گذاری فقط فارسی (، ؟ ؛ «»)؛ خط تیرهٔ فرنگی ممنوع؛ رجیستر یکدست."
+    }
+   }
+  },
+  {
+   "id": "code-r3",
+   "name": "آماده‌سازی بازبینی ۳",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": "2",
+   "position": [
+    1940,
+    680
+   ],
+   "parameters": {
+    "mode": "runOnceForAllItems",
+    "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج.\\n'\n  + 'تو به ابزارهای کل والت دسترسی داری (search، ruling، read_note، map_vault): '\n  + 'هرجا شکی داشتی — واژه، نشانه‌گذاری، ساختار جمله، لحن — اول با ابزارها در والت '\n  + 'راستی‌آزمایی کن و بعد قضاوت کن. اگر نمی‌دانی کجا را بگردی، اول map_vault را ببین. '\n  + 'چک‌لیست نقطهٔ شروع است نه سقف؛ اگر ایرادی خارج از چک‌لیست دیدی و والت تأییدش کرد، گزارش بده. '\n  + 'قاعده‌به‌قاعده جلو برو: برای هر بند چک‌لیست جداگانه رأی بده (رعایت شده/نشده) و هیچ بندی را رد نکن. هر بندی که رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
+   }
+  },
+  {
+   "id": "ag-v3",
+   "name": "بازبین ۳",
+   "type": "@n8n/n8n-nodes-langchain.agent",
+   "typeVersion": "1.8",
+   "position": [
+    2160,
+    680
+   ],
+   "parameters": {
+    "promptType": "define",
+    "text": "={{ $json.prompt }}",
+    "options": {
+     "systemMessage": "تو ویراستار ارشد و بازبین سخت‌گیر زبان فارسی هستی و به کل والت ۱۵۷۷ یادداشتی دسترسی مستقیم داری (ابزارهای search، ruling، read_note، map_vault). کارت مچ‌گیری است، نه تعریف؛ فقط ایراد واقعی و مشخص گزارش می‌کنی و هر شکی را اول با ابزارهای والت راستی‌آزمایی می‌کنی."
+    }
+   }
+  },
+  {
+   "id": "code-a3",
+   "name": "تحلیل بازبینی ۳",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": "2",
+   "position": [
+    2380,
+    680
+   ],
+   "parameters": {
+    "mode": "runOnceForAllItems",
+    "jsCode": "const raw = $input.first().json.output ?? '';\nlet clean = true, issues = [];\ntry {\n  const m = raw.match(/\\{[\\s\\S]*\\}/);\n  if (m) { const o = JSON.parse(m[0]);\n    issues = Array.isArray(o.issues) ? o.issues : [];\n    clean = o.clean === true && issues.length === 0;\n  }\n} catch (e) { clean = false; issues = ['خروجی بازبین JSON نبود؛ بازبینی دستی لازم است.']; }\nreturn [{ json: { clean, issues } }];"
+   }
+  },
+  {
+   "id": "if-۳",
+   "name": "تمیز شد؟ ۳",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": "2",
+   "position": [
+    2600,
+    680
+   ],
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "loose"
+     },
+     "conditions": [
+      {
+       "id": "c1",
+       "leftValue": "={{ $json.clean }}",
+       "rightValue": true,
+       "operator": {
+        "type": "boolean",
+        "operation": "true"
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   }
+  },
+  {
+   "id": "code-f4",
+   "name": "پرامپت اصلاح ۴",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": "2",
+   "position": [
+    1500,
+    920
+   ],
+   "parameters": {
+    "mode": "runOnceForAllItems",
+    "jsCode": "const a = $input.first().json;\nconst edited = a.edited ?? '';\nconst m = $('smart_rules').first().json;\nconst items = (a.issues ?? []).map((s, i) => `${i+1}. ${s}`).join('\\n');\nconst prompt =\n  'این متن یک بار ویراسته شده ولی بازبین هنوز این ایرادها را گزارش کرده:\\n'\n  + items + '\\n\\nفقط همین ایرادها را اصلاح کن؛ بقیهٔ متن را دست نزن. '\n  + 'فقط متن نهایی را برگردان، بدون هیچ توضیحی.\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن:\\n${edited}`;\nreturn [{ json: { prompt } }];"
+   }
+  },
+  {
+   "id": "ag-e4",
+   "name": "ویراستار ۴",
+   "type": "@n8n/n8n-nodes-langchain.agent",
+   "typeVersion": "1.8",
+   "position": [
+    1720,
+    920
+   ],
+   "parameters": {
+    "promptType": "define",
+    "text": "={{ $json.prompt }}",
+    "options": {
+     "systemMessage": "تو ویراستار ارشد زبان فارسی هستی؛ مسلط به رسم‌الخط و نیم‌فاصله، نشانه‌گذاری فارسی، دستور زبان، جمله‌بندی، واژه‌گزینی، سبک و لحن. هر جمله را با گوش بومی محک می‌زنی: اگر فارسی‌زبان این‌طور نمی‌گوید، بازنویسی می‌کنی. نشانه‌گذاری فقط فارسی (، ؟ ؛ «»)؛ خط تیرهٔ فرنگی ممنوع؛ رجیستر یکدست."
+    }
+   }
+  },
+  {
+   "id": "lm-1",
+   "name": "مدل زبانی",
+   "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+   "typeVersion": "1.2",
+   "position": [
+    1080,
+    1180
+   ],
+   "parameters": {
+    "model": {
+     "__rl": true,
+     "mode": "list",
+     "value": "gpt-4o-mini"
+    },
+    "options": {}
+   }
+  },
+  {
+   "id": "ag-f",
+   "name": "خوانش آخر",
+   "type": "@n8n/n8n-nodes-langchain.agent",
+   "typeVersion": "1.8",
+   "position": [
+    2900,
+    200
+   ],
+   "parameters": {
+    "promptType": "define",
+    "text": "={{ $json.text }}",
+    "options": {
+     "systemMessage": "خوانش آخر با چشم خوانندهٔ نهایی: ریتم، تکرار، غلط تایپی، گوش بومی. اگر جایی گیر کردی، همان‌جا را روان کن."
+    }
+   }
+  },
+  {
+   "id": "code-pre",
+   "name": "آماده‌سازی خوانش آخر",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": "2",
+   "position": [
+    2680,
+    200
+   ],
+   "parameters": {
+    "mode": "runOnceForAllItems",
+    "jsCode": "const t = $input.first().json.output ?? $input.first().json.text ?? '';\nreturn [{ json: { text: t } }];"
+   }
+  },
+  {
+   "id": "code-rep",
+   "name": "گزارش نهایی",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": "2",
+   "position": [
+    3780,
+    200
+   ],
+   "parameters": {
+    "mode": "runOnceForAllItems",
+    "jsCode": "const g = $input.first().json;\nconst final = g.fixed ?? g.output ?? g.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prev = $('دریافت متن فارسی').first().json;\nconst reg = $('دروازهٔ رگرسیون').first().json;\nconst ledger = $('دفتر تغییرات').first().json;\nlet passes = 1;\nfor (const n of ['ویراستار ۲', 'ویراستار ۳', 'ویراستار ۴']) {\n  try { const it = $(n).first(); if (it && it.json) passes++; } catch (e) { break; }\n}\nconst mechClean = g.clean ?? true;\nconst regPass = reg.pass ?? false;\nreturn [{ json: {\n  text: final,\n  task_type: prev.task_type ?? '',\n  rules_used: m.rules_count ?? 0,\n  passes,\n  mechanical_clean: mechClean,\n  regression_pass: regPass,\n  regression_resolved: reg.resolved_count ?? 0,\n  regression_remaining: reg.remaining ?? [],\n  change_count: ledger.change_count ?? 0,\n  changes: (ledger.changes ?? []).slice(0, 20),\n  needs_human_review: !mechClean || !regPass\n} }];"
+   }
+  },
+  {
+   "id": "resp-1",
+   "name": "پاسخ نهایی",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": "1.1",
+   "position": [
+    4000,
+    200
+   ],
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ $json }}",
+    "options": {}
+   }
+  },
+  {
+   "id": "mcp-smart",
+   "name": "smart_rules",
+   "type": "n8n-nodes-mcp.mcpClient",
+   "typeVersion": "1",
+   "position": [
+    920,
+    200
+   ],
+   "parameters": {
+    "connectionType": "http",
+    "uriOverride": "http://localhost:8060/mcp",
+    "headersOverride": "{\"Authorization\": \"Bearer <PUT-API-KEY-HERE>\"}",
+    "operation": "executeTool",
+    "toolName": "smart_rules",
+    "toolParameters": "{\n  \"text\": \"={{ $json.fixed }}\",\n  \"task_type\": \"={{ $json.task_type }}\",\n  \"max_rules\": 60\n}"
+   }
+  },
+  {
+   "id": "tool-vault",
+   "name": "ابزارهای والت",
+   "type": "@n8n/n8n-nodes-langchain.toolMcpClient",
+   "typeVersion": "1",
+   "position": [
+    1330,
+    1180
+   ],
+   "parameters": {
+    "sseEndpoint": "http://localhost:8060/mcp/sse",
+    "toolsToInclude": "all",
+    "notes": "یک‌بار در n8n بازش کن: SSE Endpoint را چک کن و توکن Bearer را در Credentials بگذار؛ Tools to Include = All."
+   }
+  },
+  {
+   "id": "mcp-mech0",
+   "name": "پالایش مکانیکی",
+   "type": "n8n-nodes-mcp.mcpClient",
+   "typeVersion": "1",
+   "position": [
+    700,
+    200
+   ],
+   "parameters": {
+    "connectionType": "http",
+    "uriOverride": "http://localhost:8060/mcp",
+    "headersOverride": "{\"Authorization\": \"Bearer <PUT-API-KEY-HERE>\"}",
+    "operation": "executeTool",
+    "toolName": "mechanical_pass",
+    "toolParameters": "{\n  \"text\": \"={{ $json.text }}\"\n}"
+   }
+  },
+  {
+   "id": "mcp-mech9",
+   "name": "دروازهٔ مکانیکی",
+   "type": "n8n-nodes-mcp.mcpClient",
+   "typeVersion": "1",
+   "position": [
+    3120,
+    200
+   ],
+   "parameters": {
+    "connectionType": "http",
+    "uriOverride": "http://localhost:8060/mcp",
+    "headersOverride": "{\"Authorization\": \"Bearer <PUT-API-KEY-HERE>\"}",
+    "operation": "executeTool",
+    "toolName": "mechanical_pass",
+    "toolParameters": "{\n  \"text\": \"={{ $json.output }}\"\n}"
+   }
+  },
+  {
+   "id": "lm-2",
+   "name": "مدل بازبین",
+   "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+   "typeVersion": "1.2",
+   "position": [
+    1080,
+    1400
+   ],
+   "parameters": {
+    "model": {
+     "__rl": true,
+     "mode": "list",
+     "value": "gpt-4o"
+    },
+    "options": {},
+    "notes": "مدل بازبین را قوی‌ترین مدل بگذار؛ داور باید از سازنده مستقل و قوی‌تر باشد."
+   }
+  },
+  {
+   "id": "mcp-reg",
+   "name": "دروازهٔ رگرسیون",
+   "type": "n8n-nodes-mcp.mcpClient",
+   "typeVersion": "1",
+   "position": [
+    3340,
+    200
+   ],
+   "parameters": {
+    "connectionType": "http",
+    "uriOverride": "http://localhost:8060/mcp",
+    "headersOverride": "{\"Authorization\": \"Bearer <PUT-API-KEY-HERE>\"}",
+    "operation": "executeTool",
+    "toolName": "verify_regression",
+    "toolParameters": "{\n  \"before_text\": \"={{ $('دریافت متن فارسی').first().json.text }}\",\n  \"after_text\": \"={{ $json.fixed }}\"\n}"
+   }
+  },
+  {
+   "id": "mcp-diff",
+   "name": "دفتر تغییرات",
+   "type": "n8n-nodes-mcp.mcpClient",
+   "typeVersion": "1",
+   "position": [
+    3560,
+    200
+   ],
+   "parameters": {
+    "connectionType": "http",
+    "uriOverride": "http://localhost:8060/mcp",
+    "headersOverride": "{\"Authorization\": \"Bearer <PUT-API-KEY-HERE>\"}",
+    "operation": "executeTool",
+    "toolName": "diff_report",
+    "toolParameters": "{\n  \"before_text\": \"={{ $('دریافت متن فارسی').first().json.text }}\",\n  \"after_text\": \"={{ $('دروازهٔ مکانیکی').first().json.fixed }}\"\n}"
+   }
+  }
+ ],
+ "connections": {
+  "دریافت متن فارسی": {
+   "main": [
+    [
+     {
+      "node": "پالایش مکانیکی",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "پرامپت پاس ۱": {
+   "main": [
+    [
+     {
+      "node": "ویراستار ۱",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "ویراستار ۱": {
+   "ai_languageModel": [
+    [
+     {
+      "node": "مدل زبانی",
+      "type": "ai_languageModel",
+      "index": 0
+     }
+    ]
+   ],
+   "main": [
+    [
+     {
+      "node": "آماده‌سازی بازبینی ۱",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "آماده‌سازی بازبینی ۱": {
+   "main": [
+    [
+     {
+      "node": "بازبین ۱",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "بازبین ۱": {
+   "ai_languageModel": [
+    [
+     {
+      "node": "مدل بازبین",
+      "type": "ai_languageModel",
+      "index": 0
+     }
+    ]
+   ],
+   "main": [
+    [
+     {
+      "node": "تحلیل بازبینی ۱",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ],
+   "ai_tool": [
+    [
+     {
+      "node": "ابزارهای والت",
+      "type": "ai_tool",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "تحلیل بازبینی ۱": {
+   "main": [
+    [
+     {
+      "node": "تمیز شد؟ ۱",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "تمیز شد؟ ۱": {
+   "main": [
+    [
+     {
+      "node": "آماده‌سازی خوانش آخر",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "پرامپت اصلاح ۲",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "پرامپت اصلاح ۲": {
+   "main": [
+    [
+     {
+      "node": "ویراستار ۲",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "ویراستار ۲": {
+   "ai_languageModel": [
+    [
+     {
+      "node": "مدل زبانی",
+      "type": "ai_languageModel",
+      "index": 0
+     }
+    ]
+   ],
+   "main": [
+    [
+     {
+      "node": "آماده‌سازی بازبینی ۲",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "آماده‌سازی بازبینی ۲": {
+   "main": [
+    [
+     {
+      "node": "بازبین ۲",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "بازبین ۲": {
+   "ai_languageModel": [
+    [
+     {
+      "node": "مدل بازبین",
+      "type": "ai_languageModel",
+      "index": 0
+     }
+    ]
+   ],
+   "main": [
+    [
+     {
+      "node": "تحلیل بازبینی ۲",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ],
+   "ai_tool": [
+    [
+     {
+      "node": "ابزارهای والت",
+      "type": "ai_tool",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "تحلیل بازبینی ۲": {
+   "main": [
+    [
+     {
+      "node": "تمیز شد؟ ۲",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "تمیز شد؟ ۲": {
+   "main": [
+    [
+     {
+      "node": "آماده‌سازی خوانش آخر",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "پرامپت اصلاح ۳",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "پرامپت اصلاح ۳": {
+   "main": [
+    [
+     {
+      "node": "ویراستار ۳",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "ویراستار ۳": {
+   "ai_languageModel": [
+    [
+     {
+      "node": "مدل زبانی",
+      "type": "ai_languageModel",
+      "index": 0
+     }
+    ]
+   ],
+   "main": [
+    [
+     {
+      "node": "آماده‌سازی بازبینی ۳",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "آماده‌سازی بازبینی ۳": {
+   "main": [
+    [
+     {
+      "node": "بازبین ۳",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "بازبین ۳": {
+   "ai_languageModel": [
+    [
+     {
+      "node": "مدل بازبین",
+      "type": "ai_languageModel",
+      "index": 0
+     }
+    ]
+   ],
+   "main": [
+    [
+     {
+      "node": "تحلیل بازبینی ۳",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ],
+   "ai_tool": [
+    [
+     {
+      "node": "ابزارهای والت",
+      "type": "ai_tool",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "تحلیل بازبینی ۳": {
+   "main": [
+    [
+     {
+      "node": "تمیز شد؟ ۳",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "تمیز شد؟ ۳": {
+   "main": [
+    [
+     {
+      "node": "آماده‌سازی خوانش آخر",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "پرامپت اصلاح ۴",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "پرامپت اصلاح ۴": {
+   "main": [
+    [
+     {
+      "node": "ویراستار ۴",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "ویراستار ۴": {
+   "ai_languageModel": [
+    [
+     {
+      "node": "مدل زبانی",
+      "type": "ai_languageModel",
+      "index": 0
+     }
+    ]
+   ],
+   "main": [
+    [
+     {
+      "node": "آماده‌سازی خوانش آخر",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "آماده‌سازی خوانش آخر": {
+   "main": [
+    [
+     {
+      "node": "خوانش آخر",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "خوانش آخر": {
+   "main": [
+    [
+     {
+      "node": "دروازهٔ مکانیکی",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ],
+   "ai_languageModel": [
+    [
+     {
+      "node": "مدل بازبین",
+      "type": "ai_languageModel",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "گزارش نهایی": {
+   "main": [
+    [
+     {
+      "node": "پاسخ نهایی",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "smart_rules": {
+   "main": [
+    [
+     {
+      "node": "پرامپت پاس ۱",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "پالایش مکانیکی": {
+   "main": [
+    [
+     {
+      "node": "smart_rules",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "دروازهٔ مکانیکی": {
+   "main": [
+    [
+     {
+      "node": "دروازهٔ رگرسیون",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "دروازهٔ رگرسیون": {
+   "main": [
+    [
+     {
+      "node": "دفتر تغییرات",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "دفتر تغییرات": {
+   "main": [
+    [
+     {
+      "node": "گزارش نهایی",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1"
+ },
+ "pinData": {}
 }
