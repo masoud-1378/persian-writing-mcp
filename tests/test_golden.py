@@ -47,6 +47,9 @@ def main():
         check(f"{cid} smart checklist", sr["rules_count"] > 0 and
               all(r.get("why") for r in sr["rules"]), f"n={sr['rules_count']}")
 
+        for w in c.get("expect_mechanical_unchanged_words", []):
+            check(f"{cid} keeps '{w}'", w in m["fixed"], f"fixer mangled '{w}'")
+
         reg = core.verify_regression(text, text)
         check(f"{cid} gate fails on unfixed", not reg["pass"] or not reg["signals_before"],
               "gate passed a text that still has problem signals")
