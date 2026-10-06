@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "obsidian-persian-mcp"
+version = "0.1.0"
+description = "Persian writing/editing vault MCP server (stdio + Streamable HTTP), n8n-friendly"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Masoud Akbari" }]
+keywords = ["mcp", "persian", "farsi", "writing", "editing", "n8n"]
+dependencies = [
+  "fastmcp>=2",
+  "uvicorn>=0.30",
+]
+
+[project.scripts]
+obper-mcp = "obper_mcp.server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+obper_mcp = ["rule_packs.json", "data/vault-index.json"]
