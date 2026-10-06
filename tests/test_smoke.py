@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Smoke tests for obsidian-persian-mcp.
 
-Covers all 7 tools over stdio, the HTTP transport (auth positive/negative),
+Covers all 8 tools over stdio, the HTTP transport (auth positive/negative),
 and the /health endpoint. Run with the search-console venv python:
 
     ~/workspace/mcp-servers/search-console/.venv/bin/python tests/test_smoke.py
@@ -67,6 +67,9 @@ async def stdio_tools():
             out["ruling"] = await call("ruling", {"query": "فرق نقطه و ویرگول"})
             out["rule_pack"] = await call("rule_pack", {"task_type": "گزارش رسمی", "max_rules": 10})
             out["deep_rules"] = await call("deep_rules", {"task_type": "گزارش رسمی", "per_dim": 8})
+            out["smart_rules"] = await call("smart_rules", {
+                "text": "در دنیای امروز، این گزارش می‌باشد که توسط تیم تهیه گردیده است, و ارسال می شود.",
+                "task_type": "گزارش رسمی", "max_rules": 60})
     return out
 
 
@@ -89,10 +92,10 @@ def http_request(method, path, key=None, data=None):
 
 
 def main():
-    # ---- stdio: all 7 tools ----
+    # ---- stdio: all 8 tools ----
     out = asyncio.run(stdio_tools())
-    check("stdio tools listed (7)", out["tool_names"] == sorted(
-        ["search", "read_note", "map_vault", "reindex", "ruling", "rule_pack", "deep_rules"]),
+    check("stdio tools listed (8)", out["tool_names"] == sorted(
+        ["search", "read_note", "map_vault", "reindex", "ruling", "rule_pack", "deep_rules", "smart_rules"]),
         str(out["tool_names"]))
     check("search returns hits", len(out["search"].get("hits", [])) > 0)
     check("read_note returns text", len(out["read_note"].get("text", "")) > 100)
@@ -108,6 +111,12 @@ def main():
           dr.get("rules_count", 0) >= 20 and len(dr.get("checklist", "")) > 500,
           str(dr.get("rules_count")))
     check("deep_rules covers 6 dimensions", len(dr.get("dimensions", [])) == 6)
+    sr = out["smart_rules"]
+    check("smart_rules diagnoses dirty text", len(sr.get("diagnosis", [])) >= 3,
+          str([s["signal"] for s in sr.get("diagnosis", [])]))
+    check("smart_rules rules carry why",
+          all(r.get("why") for r in sr.get("rules", [])) and 0 < sr.get("rules_count", 0) <= 60,
+          str(sr.get("rules_count")))
 
     # ---- HTTP transport ----
     proc = subprocess.Popen(

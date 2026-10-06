@@ -105,6 +105,21 @@ def deep_rules(task_type: str, per_dim: int = 8) -> dict:
     return core.deep_rules_for(task_type, per_dim)
 
 
+@mcp.tool()
+def smart_rules(text: str, task_type: str, max_rules: int = 60) -> dict:
+    """Diagnose Persian text, then build a tailored deep-edit checklist.
+
+    Smarter than deep_rules: instead of a fixed checklist, the text is first
+    scanned for editorial risk signals (long sentences, bureaucratic fossils,
+    Arabic chars, Latin punctuation, ZWNJ issues, quotes, numbers, cliches,
+    repetition, ...). Rules are then pulled for the issues actually present,
+    ordered by signal weight; every rule carries ``why`` (the evidence that
+    selected it). Layer 1 is always the task-type rule_pack.
+    General-purpose: any agent runs the edit -> review loop itself.
+    """
+    return core.smart_rules_for(text, task_type, max_rules)
+
+
 class _ApiKeyMiddleware(BaseHTTPMiddleware):
     """Bearer / ?api_key gate for the HTTP transports. /health stays open."""
 

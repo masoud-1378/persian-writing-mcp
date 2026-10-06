@@ -291,3 +291,142 @@ def deep_rules_for(task_type: str, per_dim: int = 8) -> dict:
     return {"task_type": task_type, "dimensions": dims,
             "rules_count": len(rules), "count": len(rules),
             "rules": rules, "checklist": checklist}
+
+
+# ---------------------------------------------------------------------------
+# Smart (diagnosis-driven) rule selection.
+# Instead of a fixed checklist, the text is first scanned for editorial risk
+# signals; rules are then pulled for the issues actually present, each tagged
+# with *why* it was selected.
+
+SIGNAL_QUERIES = {
+    "long_sentence": ["جمله طولانی", "ویرایش جمله"],
+    "bureaucratic": ["حشو اداری", "نثر اداری"],
+    "passive": ["جمله مجهول"],
+    "passive_freq": ["جمله مجهول", "تنوع فعل"],
+    "arabic_chars": ["حروف عربی", "رسم‌الخط فارسی"],
+    "latin_punct": ["نشانه‌گذاری فارسی"],
+    "zwnj": ["نیم‌فاصله"],
+    "quotes": ["نقل‌قول مستقیم", "گیومه"],
+    "numbers": ["نگارش اعداد فارسی"],
+    "percent": ["درصد"],
+    "english": ["وام‌واژه", "معادل‌سازی"],
+    "cliche": ["کلیشه", "شروع متن"],
+    "repetition": ["تکرار واژه"],
+    "long_para": ["پاراگراف", "بندبندی"],
+    "no_para": ["پاراگراف", "بندبندی"],
+    "questions": ["علامت سؤال"],
+}
+
+
+def diagnose(text: str) -> list:
+    """Scan Persian text for editorial risk signals (stdlib regex only).
+
+    Returns a list of {"signal", "weight", "evidence", "queries"} dicts.
+    Weights: 3 = critical, 2 = notable, 1 = minor.
+    """
+    t = text or ""
+    out = []
+
+    def add(sid, weight, evidence):
+        out.append({"signal": sid, "weight": weight, "evidence": evidence,
+                    "queries": SIGNAL_QUERIES.get(sid, [])})
+
+    sents = [s.strip() for s in re.split(r"[.!?…؟\n]+", t) if s.strip()]
+    long_s = [s for s in sents if len(s.split()) > 35]
+    if long_s:
+        add("long_sentence", 3, f"{len(long_s)} جملهٔ بالای ۳۵ واژه")
+
+    fossils = ["می‌باشد", "می‌باشند", "گردید", "لذا", "جهت", "کلیه",
+               "نظر به", "بدینوسیله", "بدین‌وسیله", "فوق‌الذکر", "مذکور"]
+    found = [w for w in fossils if w in t]
+    if found:
+        add("bureaucratic", 3, "حشو اداری: " + "، ".join(found[:3]))
+
+    if re.search(r"(توسط|از سوی|به‌وسیلهٔ|به وسیلهٔ)", t):
+        add("passive", 2, "عامل مجهول‌ساز (توسط/از سوی)")
+    if len(re.findall(r"(شده است|گردیده است|می‌شود|می‌شوند|خواهد شد)", t)) >= 2:
+        add("passive_freq", 2, "تکرار صورت‌های مجهول")
+
+    if re.search(r"[يك]", t):
+        add("arabic_chars", 3, "حروف عربی «ي» یا «ك» در متن")
+    if re.search(r"[,;!?\"'()\[\]–—-]", t):
+        add("latin_punct", 3, "نشانه‌گذاری لاتین در متن")
+    zwnj_hits = []
+    if re.search(r"(^|\s)(می|نمی)\s+\S", t):
+        zwnj_hits.append("«می/نمی» جدا از فعل")
+    if re.search(r"\s(ها|های|تر|ترین|گری)\s", t):
+        zwnj_hits.append("پسوند جدا («ها/تر/ترین»)")
+    if zwnj_hits:
+        add("zwnj", 3, "؛ ".join(zwnj_hits))
+
+    if '"' in t or "«" in t:
+        add("quotes", 2, "نقل‌قول در متن")
+    if re.search(r"[0-9۰-۹]", t):
+        add("numbers", 2, "عدد در متن")
+    if "%" in t or "٪" in t or "درصد" in t:
+        add("percent", 2, "درصد در متن")
+    if re.search(r"[a-zA-Z]", t):
+        add("english", 2, "واژهٔ لاتین در متن")
+
+    cliches = ["در دنیای امروز", "شایان ذکر است", "لازم به ذکر است",
+               "در این راستا", "گفتنی است"]
+    fc = [c for c in cliches if c in t]
+    if fc:
+        add("cliche", 3, "کلیشه: " + "، ".join(fc[:2]))
+
+    rep = 0
+    for s in sents:
+        cnt: dict[str, int] = {}
+        for w in s.split():
+            if len(w) > 2:
+                cnt[w] = cnt.get(w, 0) + 1
+        if any(v >= 4 for v in cnt.values()):
+            rep += 1
+    if rep:
+        add("repetition", 2, f"تکرار واژه در {rep} جمله")
+
+    paras = [p for p in t.split("\n") if p.strip()]
+    if paras and max(len(p.split()) for p in paras) > 120:
+        add("long_para", 2, "بندِ خیلی بلند (بالای ۱۲۰ واژه)")
+    if len(paras) <= 1 and len(t.split()) > 200:
+        add("no_para", 2, "متن تک‌بندِ بلند")
+    if "؟" in t:
+        add("questions", 1, "جملهٔ پرسشی در متن")
+    return out
+
+
+def smart_rules_for(text: str, task_type: str, max_rules: int = 60,
+                    per_query: int = 6) -> dict:
+    """Diagnose the text, then build a tailored deep-edit checklist.
+
+    Layer 1 (base): the task-type rule_pack (up to 10 rules).
+    Layer 2 (diagnosis-driven): for each detected risk signal, run its
+    targeted queries and add the best verified notes, ordered by signal
+    weight. Every rule carries ``why`` — the evidence that selected it.
+    """
+    diag = diagnose(text)
+    seen: dict[str, dict] = {}
+    base = rule_pack_for(task_type, 10)
+    for r in base["rules"]:
+        if r["id"] not in seen:
+            seen[r["id"]] = {**r, "why": f"چک‌لیست پایهٔ «{task_type}»"}
+    for sig in sorted(diag, key=lambda s: -s["weight"]):
+        for q in sig["queries"]:
+            pack = rule_pack_for(q, per_query)
+            for r in pack["rules"]:
+                if r["id"] not in seen:
+                    if len(seen) >= max_rules:
+                        break
+                    seen[r["id"]] = {**r, "why": sig["evidence"]}
+            if len(seen) >= max_rules:
+                break
+        if len(seen) >= max_rules:
+            break
+    rules = list(seen.values())
+    checklist = "\n".join(
+        f"{i + 1}. {r['title']}: {r['rule']} (چرا: {r['why']})"
+        for i, r in enumerate(rules))
+    return {"task_type": task_type, "diagnosis": diag,
+            "rules_count": len(rules), "count": len(rules),
+            "rules": rules, "checklist": checklist}
