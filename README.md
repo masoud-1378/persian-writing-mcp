@@ -1,6 +1,6 @@
 # persian-writing-mcp
 
-[![tests](https://github.com/masoud-1378/persian-writing-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/masoud-1378/persian-writing-mcp/actions)
+[![tests](https://github.com/masoudroot/persian-writing-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/masoudroot/persian-writing-mcp/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ## این چیست؟
@@ -70,7 +70,7 @@
 اگر داکر نداری، با pip نصبش کن.
 
 ```bash
-pip install git+https://github.com/masoud-1378/persian-writing-mcp.git
+pip install git+https://github.com/masoudroot/persian-writing-mcp.git
 obper-mcp
 ```
 
