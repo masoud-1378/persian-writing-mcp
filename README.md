@@ -1,5 +1,11 @@
 # persian-writing-mcp
 
+[![tests](https://github.com/masoud-1378/persian-writing-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/masoud-1378/persian-writing-mcp/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+> والت ۱۵۷۷ یادداشتی نویسندگی و ویراستاری فارسی، به‌صورت یک سرور MCP:
+> جست‌وجو، حکم ویراستاری و «بستهٔ قاعده» برای هر نوع متن — از n8n تا هر کلاینت MCP.
+
 Masoud's Persian writing/editing vault (1577 Obsidian notes: orthography,
 punctuation, word choice, sentence & paragraph, style, editing process,
 checklists) as an MCP server. stdio for local AI clients, Streamable HTTP
