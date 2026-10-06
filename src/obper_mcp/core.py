@@ -260,6 +260,69 @@ def rule_pack_for(task_type: str, max_rules: int = 10) -> dict:
             "seed_queries": queries, "count": len(rules), "rules": rules}
 
 
+# Coverage taxonomy: the vault's own knowledge areas become the review protocol.
+# Each area checks something; the checklist walks them all instead of being
+# limited to whatever the regex signals happened to fire.
+COVERAGE_AREAS = [
+    ("رسم‌الخط و نشانه‌گذاری", ["رسم‌الخط نشانه‌گذاری", "نیم‌فاصله"]),
+    ("دستور زبان", ["دستور زبان فارسی", "ساختمان جمله فعل"]),
+    ("جمله و پاراگراف", ["جمله پاراگراف", "بندبندی متن"]),
+    ("واژه‌گزینی و درست‌نویسی", ["واژه‌گزینی درست‌نویسی", "انتخاب واژه"]),
+    ("سبک و نثر", ["سبک نثر", "لحن مخاطب"]),
+    ("ویرایش و بازنویسی", ["ویرایش بازنویسی", "بازبینی متن"]),
+    ("انسجام و ساختار", ["انسجام ساختار متن", "وحدت موضوع"]),
+]
+TASK_COVERAGE_HINTS = [
+    ("رسمی|گزارش|اداری|نامه|پروپوزال", "نثر رسمی و اداری",
+     ["نثر رسمی اداری", "گزارش نویسی"]),
+    ("وب|سایت|سئو|محتوا|لندینگ", "تولید محتوای دیجیتال",
+     ["تولید محتوای دیجیتال", "متن وب"]),
+    ("داستان|ادبی|خلاق|رمان", "نویسندگی خلاق",
+     ["نویسندگی خلاق", "بلاغت آرایه"]),
+    ("خبر", "خبرنویسی", ["خبرنویسی", "لید خبر"]),
+    ("مقاله|علمی|تحقیق|پایان‌نامه", "نثر علمی",
+     ["نثر علمی", "مقاله علمی"]),
+]
+# note types that are course material / drills, not editorial rules
+_COVERAGE_SKIP_TYPES = {"exercise", "academy-lesson", "academy-ref",
+                        "academy-tool", "index", "content-map", "source-guide"}
+
+
+def _coverage_rules(area_label, queries, per_area=2):
+    """Top verified editorial notes for one knowledge area."""
+    out, seen_ids = [], set()
+    for q in queries:
+        terms = tokenize(q)
+        if not terms:
+            continue
+        for s, d in _bm25(terms, 10):
+            if d["id"] in seen_ids:
+                continue
+            if note_status(d["id"]) != "verified":
+                continue
+            if (d.get("type") or "").strip('"') in _COVERAGE_SKIP_TYPES:
+                continue
+            seen_ids.add(d["id"])
+            section, text = extract_section(d["id"], _RULEPACK_SECTIONS)
+            if not text:
+                continue
+            out.append({"id": d["id"], "title": d["title"],
+                        "rule": _shorten(text), "score": round(s, 3),
+                        "why": f"پوشش حوزهٔ «{area_label}»"})
+            if len(out) >= per_area:
+                break
+        if len(out) >= per_area:
+            break
+    return out
+
+
+def _task_coverage_area(task_type):
+    for pat, label, queries in TASK_COVERAGE_HINTS:
+        if re.search(pat, task_type or ""):
+            return label, queries
+    return "ساختار و پایان‌بندی", ["ساختار متن", "شروع پایان متن"]
+
+
 # Fixed editorial dimensions for the deep-polish pipeline: the task-specific
 # checklist plus the five dimensions every Persian text must pass.
 DEEP_DIMENSIONS = ["نیم‌فاصله", "ویرگول و نشانه‌گذاری",
@@ -414,9 +477,9 @@ def smart_rules_for(text: str, task_type: str, max_rules: int = 60,
     Layer 2 (diagnosis-driven): for each detected risk signal, run its
     targeted queries and add the best verified notes, ordered by signal
     weight. Every rule carries ``why`` — the evidence that selected it.
-    Layer 3 (always-on deep review): cohesion, rhythm, paragraph unity and
-    structure are checked for EVERY text — a professional editor never skips
-    them just because the orthography is clean.
+    Layer 3 (coverage): the vault's own knowledge areas are walked one by
+    one — each area checks something, so the checklist is driven by the
+    knowledge itself, not limited to whatever the signals fired on.
     """
     diag = diagnose(text)
     seen: dict[str, dict] = {}
@@ -424,11 +487,6 @@ def smart_rules_for(text: str, task_type: str, max_rules: int = 60,
     for r in base["rules"]:
         if r["id"] not in seen:
             seen[r["id"]] = {**r, "why": f"چک‌لیست پایهٔ «{task_type}»"}
-    for dq in ("انسجام معنایی بند", "ریتم نثر",
-               "پاراگراف و وحدت موضوع", "ممیزی ساختار"):
-        for r in rule_pack_for(dq, 2)["rules"]:
-            if r["id"] not in seen and len(seen) < max_rules:
-                seen[r["id"]] = {**r, "why": "بازبینی عمیق همیشگی"}
     for sig in sorted(diag, key=lambda s: -s["weight"]):
         for q in sig["queries"]:
             pack = rule_pack_for(q, per_query)
@@ -441,13 +499,26 @@ def smart_rules_for(text: str, task_type: str, max_rules: int = 60,
                 break
         if len(seen) >= max_rules:
             break
+    areas = list(COVERAGE_AREAS)
+    tlabel, tqueries = _task_coverage_area(task_type)
+    areas.append((tlabel, tqueries))
+    coverage_areas = []
+    for label, queries in areas:
+        added = False
+        for r in _coverage_rules(label, queries):
+            if r["id"] not in seen and len(seen) < max_rules:
+                seen[r["id"]] = r
+                added = True
+        if added:
+            coverage_areas.append(label)
     rules = list(seen.values())
     checklist = "\n".join(
         f"{i + 1}. {r['title']}: {r['rule']} (چرا: {r['why']})"
         for i, r in enumerate(rules))
     return {"task_type": task_type, "diagnosis": diag,
             "rules_count": len(rules), "count": len(rules),
-            "rules": rules, "checklist": checklist}
+            "rules": rules, "checklist": checklist,
+            "coverage_areas": coverage_areas}
 
 
 # ---------------------------------------------------------------------------
