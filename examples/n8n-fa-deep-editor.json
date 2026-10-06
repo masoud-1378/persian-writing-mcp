@@ -443,12 +443,12 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": "2",
       "position": [
-        3560,
+        3780,
         200
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const g = $input.first().json;\nconst final = g.fixed ?? g.output ?? g.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prev = $('دریافت متن فارسی').first().json;\nconst reg = $('دروازهٔ رگرسیون').first().json;\nlet passes = 1;\nfor (const n of ['ویراستار ۲', 'ویراستار ۳', 'ویراستار ۴']) {\n  try { const it = $(n).first(); if (it && it.json) passes++; } catch (e) { break; }\n}\nconst mechClean = g.clean ?? true;\nconst regPass = reg.pass ?? false;\nreturn [{ json: {\n  text: final,\n  task_type: prev.task_type ?? '',\n  rules_used: m.rules_count ?? 0,\n  passes,\n  mechanical_clean: mechClean,\n  regression_pass: regPass,\n  regression_resolved: reg.resolved_count ?? 0,\n  regression_remaining: reg.remaining ?? [],\n  needs_human_review: !mechClean || !regPass\n} }];"
+        "jsCode": "const g = $input.first().json;\nconst final = g.fixed ?? g.output ?? g.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prev = $('دریافت متن فارسی').first().json;\nconst reg = $('دروازهٔ رگرسیون').first().json;\nconst ledger = $('دفتر تغییرات').first().json;\nlet passes = 1;\nfor (const n of ['ویراستار ۲', 'ویراستار ۳', 'ویراستار ۴']) {\n  try { const it = $(n).first(); if (it && it.json) passes++; } catch (e) { break; }\n}\nconst mechClean = g.clean ?? true;\nconst regPass = reg.pass ?? false;\nreturn [{ json: {\n  text: final,\n  task_type: prev.task_type ?? '',\n  rules_used: m.rules_count ?? 0,\n  passes,\n  mechanical_clean: mechClean,\n  regression_pass: regPass,\n  regression_resolved: reg.resolved_count ?? 0,\n  regression_remaining: reg.remaining ?? [],\n  change_count: ledger.change_count ?? 0,\n  changes: (ledger.changes ?? []).slice(0, 20),\n  needs_human_review: !mechClean || !regPass\n} }];"
       }
     },
     {
@@ -457,7 +457,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": "1.1",
       "position": [
-        3780,
+        4000,
         200
       ],
       "parameters": {
@@ -588,6 +588,24 @@
         "operation": "executeTool",
         "toolName": "verify_regression",
         "toolParameters": "{\n  \"before_text\": \"={{ $('دریافت متن فارسی').first().json.text }}\",\n  \"after_text\": \"={{ $json.fixed }}\"\n}"
+      }
+    },
+    {
+      "id": "mcp-diff",
+      "name": "دفتر تغییرات",
+      "type": "n8n-nodes-mcp.mcpClient",
+      "typeVersion": "1",
+      "position": [
+        3560,
+        200
+      ],
+      "parameters": {
+        "connectionType": "http",
+        "uriOverride": "http://localhost:8060/mcp",
+        "headersOverride": "{\"Authorization\": \"Bearer <PUT-API-KEY-HERE>\"}",
+        "operation": "executeTool",
+        "toolName": "diff_report",
+        "toolParameters": "{\n  \"before_text\": \"={{ $('دریافت متن فارسی').first().json.text }}\",\n  \"after_text\": \"={{ $('دروازهٔ مکانیکی').first().json.fixed }}\"\n}"
       }
     }
   ],
@@ -1010,6 +1028,17 @@
       ]
     },
     "دروازهٔ رگرسیون": {
+      "main": [
+        [
+          {
+            "node": "دفتر تغییرات",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "دفتر تغییرات": {
       "main": [
         [
           {
