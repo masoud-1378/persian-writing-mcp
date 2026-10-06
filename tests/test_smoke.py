@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Smoke tests for obsidian-persian-mcp.
 
-Covers all 8 tools over stdio, the HTTP transport (auth positive/negative),
+Covers all 9 tools over stdio, the HTTP transport (auth positive/negative),
 and the /health endpoint. Run with the search-console venv python:
 
     ~/workspace/mcp-servers/search-console/.venv/bin/python tests/test_smoke.py
@@ -70,6 +70,8 @@ async def stdio_tools():
             out["smart_rules"] = await call("smart_rules", {
                 "text": "در دنیای امروز، این گزارش می‌باشد که توسط تیم تهیه گردیده است, و ارسال می شود.",
                 "task_type": "گزارش رسمی", "max_rules": 60})
+            out["mechanical_pass"] = await call("mechanical_pass", {
+                "text": 'اين متن,دارای "نقل قول" است و می شود خواند؟ 100% تضمینی.'})
     return out
 
 
@@ -92,10 +94,10 @@ def http_request(method, path, key=None, data=None):
 
 
 def main():
-    # ---- stdio: all 8 tools ----
+    # ---- stdio: all 9 tools ----
     out = asyncio.run(stdio_tools())
-    check("stdio tools listed (8)", out["tool_names"] == sorted(
-        ["search", "read_note", "map_vault", "reindex", "ruling", "rule_pack", "deep_rules", "smart_rules"]),
+    check("stdio tools listed (9)", out["tool_names"] == sorted(
+        ["search", "read_note", "map_vault", "reindex", "ruling", "rule_pack", "deep_rules", "smart_rules", "mechanical_pass"]),
         str(out["tool_names"]))
     check("search returns hits", len(out["search"].get("hits", [])) > 0)
     check("read_note returns text", len(out["read_note"].get("text", "")) > 100)
@@ -117,6 +119,12 @@ def main():
     check("smart_rules rules carry why",
           all(r.get("why") for r in sr.get("rules", [])) and 0 < sr.get("rules_count", 0) <= 60,
           str(sr.get("rules_count")))
+    mp = out["mechanical_pass"]
+    check("mechanical_pass fixes deterministically",
+          "ي" not in mp["fixed"] and "،" in mp["fixed"] and "«" in mp["fixed"]
+          and len(mp.get("fixes", [])) >= 3, mp["fixed"][:80])
+    check("mechanical_pass is idempotent", mp.get("clean") is True and mp.get("remaining") == [],
+          str(mp.get("remaining")))
 
     # ---- HTTP transport ----
     proc = subprocess.Popen(

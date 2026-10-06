@@ -120,6 +120,20 @@ def smart_rules(text: str, task_type: str, max_rules: int = 60) -> dict:
     return core.smart_rules_for(text, task_type, max_rules)
 
 
+@mcp.tool()
+def mechanical_pass(text: str) -> dict:
+    """Deterministic mechanical fix + verification gate for Persian text.
+
+    Fixes what needs no judgment (Arabic ي/ك, Latin , ; ? %, straight quotes,
+    ZWNJ on می/نمی, spacing) and *proves* the result: ``remaining`` lists any
+    mechanical issue left, ``clean`` is true only when none remain. Use it as
+    the first step (so the LLM works on a clean base) and as the final gate
+    (so nothing ships with mechanical errors). Ambiguous cases (em/en dashes)
+    are flagged in ``remaining``, never guessed.
+    """
+    return core.mechanical_fix(text)
+
+
 class _ApiKeyMiddleware(BaseHTTPMiddleware):
     """Bearer / ?api_key gate for the HTTP transports. /health stays open."""
 

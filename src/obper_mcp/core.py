@@ -430,3 +430,62 @@ def smart_rules_for(text: str, task_type: str, max_rules: int = 60,
     return {"task_type": task_type, "diagnosis": diag,
             "rules_count": len(rules), "count": len(rules),
             "rules": rules, "checklist": checklist}
+
+
+# ---------------------------------------------------------------------------
+# Deterministic mechanical layer: fixes what needs no judgment, and proves it.
+# Unlike the LLM passes (which can "not notice"), this scans everything.
+
+def mechanical_fix(text: str) -> dict:
+    """Fix mechanically-safe Persian issues; report what remains.
+
+    100% deterministic: same input -> same output. Covers the error classes
+    that need no judgment (Arabic chars, Latin punctuation, ZWNJ on می/نمی,
+    spacing). Anything ambiguous (e.g. em/en dashes) is *flagged*, not guessed.
+    Returns {"fixed", "fixes", "remaining", "clean"}.
+    """
+    t = text or ""
+    fixes: list = []
+
+    def sub(pattern, repl, name):
+        nonlocal t
+        nt, n = re.subn(pattern, repl, t)
+        if n:
+            fixes.append({"rule": name, "count": n})
+            t = nt
+
+    sub(r"ي", "ی", "ي→ی")
+    sub(r"ك", "ک", "ك→ک")
+    sub(r"ة", "ه", "ة→ه")
+    sub(r"ؤ", "و", "ؤ→و")
+    sub(r",", "،", ",→،")
+    sub(r";", "؛", ";→؛")
+    sub(r"\?", "؟", "?→؟")
+    sub(r"%", "٪", "%→٪")
+    # straight quotes -> « » (paired)
+    if '"' in t:
+        parts = t.split('"')
+        t = "".join(p + ("«" if i % 2 == 0 else "»")
+                    for i, p in enumerate(parts[:-1])) + parts[-1]
+        fixes.append({"rule": '"→«»', "count": t.count("«")})
+    sub(r"(^|\s)می\s+(?=\S)", r"\1می‌", "می‌")
+    sub(r"(^|\s)نمی\s+(?=\S)", r"\1نمی‌", "نمی‌")
+    sub(r"\s+([،؛؟٪»])", r"\1", "حذف فاصلهٔ پیش از نشانه")
+    sub(r"([،؛؟])(?=[^\s،؛؟»])", r"\1 ", "فاصلهٔ پس از نشانه")
+    sub(r"([«])\s+", r"\1", "حذف فاصلهٔ پس از «")
+    sub(r" {2,}", " ", "فاصلهٔ چندتایی")
+    sub(r"[ \t]+\n", "\n", "فاصلهٔ پایان سطر")
+    sub(r"\n{3,}", "\n\n", "سطر خالی اضافه")
+    t = t.strip()
+
+    remaining = []
+    if re.search(r"[يك]", t):
+        remaining.append("حروف عربی باقی‌مانده")
+    if re.search(r"[,;?]", t):
+        remaining.append("نشانهٔ لاتین باقی‌مانده")
+    if re.search(r"[–—]", t):
+        remaining.append("خط تیرهٔ فرنگی (نیاز به تصمیم انسانی)")
+    if re.search(r"(^|\s)(می|نمی)\s+\S", t):
+        remaining.append("«می/نمی» جدا از فعل")
+    return {"fixed": t, "fixes": fixes,
+            "remaining": remaining, "clean": not remaining}

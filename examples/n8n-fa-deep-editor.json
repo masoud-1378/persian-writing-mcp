@@ -14,7 +14,7 @@
         "color": 4,
         "height": 460,
         "width": 420,
-        "content": "## ویراستار عمیق فارسی\nمتن را در چند پاسِ ویراستاری-بازبینی صیقل می‌دهد تا تمیز شود.\n\n۱. سرور: `obper-mcp --transport streamable-http --port 8060 --api-key <KEY>`\n۲. در گره smart_rules کلید را در Headers Override بگذار\n۳. گره «ابزارهای والت» را باز کن: SSE Endpoint را\n   `http://localhost:8060/mcp/sse` بگذار و توکن Bearer را در Credentials ست کن\n۴. به گره «مدل زبانی» کردنشیال مدل وصل کن\n۵. تست: POST /fa-deep-edit با `{\"text\": \"...\", \"task_type\": \"گزارش رسمی\"}`\n\nمعماری: smart_rules اول متن را معاینه می‌کند و چک‌لیست مخصوص همان متن را\nمی‌دهد؛ ویراستار با چک‌لیست کار می‌کند، ولی «بازبین»ها به کل والت دسترسی\nمستقیم دارند (search/ruling/read_note/map_vault) و هر شکی را خودشان در\nوالت راستی‌آزمایی می‌کنند — داور، کتابخانه را می‌شناسد، نه فقط خلاصه را."
+        "content": "## ویراستار عمیق فارسی\nلایهٔ قطعی + چند پاسِ ویراستاری-بازبینی؛ هیچ ایراد مکانیکی بی‌سروصدا رد نمی‌شود.\n\n۱. سرور: `obper-mcp --transport streamable-http --port 8060 --api-key <KEY>`\n۲. در گره‌های smart_rules / پالایش مکانیکی / دروازهٔ مکانیکی کلید را در Headers Override بگذار\n۳. گره «ابزارهای والت» را باز کن: SSE Endpoint را\n   `http://localhost:8060/mcp/sse` بگذار و توکن Bearer را در Credentials ست کن\n۴. به گره «مدل زبانی» کردنشیال مدل وصل کن\n۵. تست: POST /fa-deep-edit با `{\"text\": \"...\", \"task_type\": \"گزارش رسمی\"}`\n\nجریان: پالایش مکانیکی (رفع قطعی ي/ك، نشانهٔ لاتین، نیم‌فاصله) ← smart_rules\n(معاینهٔ متن و چک‌لیست مخصوص) ← تا ۴ پاس ویراستاری/بازبینی مسلط ← خوانش آخر ←\nدروازهٔ مکانیکی (اگر چیزی مانده باشد، needs_human_review=true برمی‌گردد)."
       }
     },
     {
@@ -44,7 +44,7 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const prev = $('دریافت متن فارسی').first().json;\nconst m = $('smart_rules').first().json;\nconst text = prev.text ?? '';\nconst prompt =\n  'متن فارسی زیر را سطر به سطر با تک‌تک بندهای این چک‌لیست ویراستاری کن. '\n  + 'هر بندی که به متن می‌خورد اعمال کن؛ معنا را عوض نکن؛ چیزی کم یا اضافه نکن. '\n  + 'فقط متن نهایی ویراسته را برگردان، بدون هیچ توضیحی.\\n\\n'\n  + `چک‌لیست (${m.rules_count} قاعده):\\n${m.checklist}\\n\\nمتن:\\n${text}`;\nreturn [{ json: { prompt } }];"
+        "jsCode": "const prev = $('دریافت متن فارسی').first().json;\nconst m = $('smart_rules').first().json;\nconst mech = $('پالایش مکانیکی').first().json;\nconst text = mech.fixed ?? prev.text ?? '';\nconst prompt =\n  'متن فارسی زیر را سطر به سطر با تک‌تک بندهای این چک‌لیست ویراستاری کن. '\n  + 'هر بندی که به متن می‌خورد اعمال کن؛ معنا را عوض نکن؛ چیزی کم یا اضافه نکن. '\n  + 'فقط متن نهایی ویراسته را برگردان، بدون هیچ توضیحی.\\n\\n'\n  + `چک‌لیست (${m.rules_count} قاعده):\\n${m.checklist}\\n\\nمتن:\\n${text}`;\nreturn [{ json: { prompt } }];"
       }
     },
     {
@@ -75,7 +75,7 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج.\\n'\n  + 'تو به ابزارهای کل والت دسترسی داری (search، ruling، read_note، map_vault): '\n  + 'هرجا شکی داشتی — واژه، نشانه‌گذاری، ساختار جمله، لحن — اول با ابزارها در والت '\n  + 'راستی‌آزمایی کن و بعد قضاوت کن. اگر نمی‌دانی کجا را بگردی، اول map_vault را ببین. '\n  + 'چک‌لیست نقطهٔ شروع است نه سقف؛ اگر ایرادی خارج از چک‌لیست دیدی و والت تأییدش کرد، گزارش بده. '\n  + 'هر بندی که هنوز رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
+        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج.\\n'\n  + 'تو به ابزارهای کل والت دسترسی داری (search، ruling، read_note، map_vault): '\n  + 'هرجا شکی داشتی — واژه، نشانه‌گذاری، ساختار جمله، لحن — اول با ابزارها در والت '\n  + 'راستی‌آزمایی کن و بعد قضاوت کن. اگر نمی‌دانی کجا را بگردی، اول map_vault را ببین. '\n  + 'چک‌لیست نقطهٔ شروع است نه سقف؛ اگر ایرادی خارج از چک‌لیست دیدی و والت تأییدش کرد، گزارش بده. '\n  + 'قاعده‌به‌قاعده جلو برو: برای هر بند چک‌لیست جداگانه رأی بده (رعایت شده/نشده) و هیچ بندی را رد نکن. هر بندی که رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
       }
     },
     {
@@ -183,7 +183,7 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج.\\n'\n  + 'تو به ابزارهای کل والت دسترسی داری (search، ruling، read_note، map_vault): '\n  + 'هرجا شکی داشتی — واژه، نشانه‌گذاری، ساختار جمله، لحن — اول با ابزارها در والت '\n  + 'راستی‌آزمایی کن و بعد قضاوت کن. اگر نمی‌دانی کجا را بگردی، اول map_vault را ببین. '\n  + 'چک‌لیست نقطهٔ شروع است نه سقف؛ اگر ایرادی خارج از چک‌لیست دیدی و والت تأییدش کرد، گزارش بده. '\n  + 'هر بندی که هنوز رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
+        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج.\\n'\n  + 'تو به ابزارهای کل والت دسترسی داری (search، ruling، read_note، map_vault): '\n  + 'هرجا شکی داشتی — واژه، نشانه‌گذاری، ساختار جمله، لحن — اول با ابزارها در والت '\n  + 'راستی‌آزمایی کن و بعد قضاوت کن. اگر نمی‌دانی کجا را بگردی، اول map_vault را ببین. '\n  + 'چک‌لیست نقطهٔ شروع است نه سقف؛ اگر ایرادی خارج از چک‌لیست دیدی و والت تأییدش کرد، گزارش بده. '\n  + 'قاعده‌به‌قاعده جلو برو: برای هر بند چک‌لیست جداگانه رأی بده (رعایت شده/نشده) و هیچ بندی را رد نکن. هر بندی که رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
       }
     },
     {
@@ -291,7 +291,7 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج.\\n'\n  + 'تو به ابزارهای کل والت دسترسی داری (search، ruling، read_note، map_vault): '\n  + 'هرجا شکی داشتی — واژه، نشانه‌گذاری، ساختار جمله، لحن — اول با ابزارها در والت '\n  + 'راستی‌آزمایی کن و بعد قضاوت کن. اگر نمی‌دانی کجا را بگردی، اول map_vault را ببین. '\n  + 'چک‌لیست نقطهٔ شروع است نه سقف؛ اگر ایرادی خارج از چک‌لیست دیدی و والت تأییدش کرد، گزارش بده. '\n  + 'هر بندی که هنوز رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
+        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج.\\n'\n  + 'تو به ابزارهای کل والت دسترسی داری (search، ruling، read_note، map_vault): '\n  + 'هرجا شکی داشتی — واژه، نشانه‌گذاری، ساختار جمله، لحن — اول با ابزارها در والت '\n  + 'راستی‌آزمایی کن و بعد قضاوت کن. اگر نمی‌دانی کجا را بگردی، اول map_vault را ببین. '\n  + 'چک‌لیست نقطهٔ شروع است نه سقف؛ اگر ایرادی خارج از چک‌لیست دیدی و والت تأییدش کرد، گزارش بده. '\n  + 'قاعده‌به‌قاعده جلو برو: برای هر بند چک‌لیست جداگانه رأی بده (رعایت شده/نشده) و هیچ بندی را رد نکن. هر بندی که رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
       }
     },
     {
@@ -443,12 +443,12 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": "2",
       "position": [
-        3120,
+        3340,
         200
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const final = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prev = $('دریافت متن فارسی').first().json;\nlet passes = 1;\nfor (const n of ['ویراستار ۲', 'ویراستار ۳', 'ویراستار ۴']) {\n  try { const it = $(n).first(); if (it && it.json) passes++; } catch (e) { break; }\n}\nreturn [{ json: { text: final, task_type: prev.task_type ?? '', rules_used: m.rules_count ?? 0, passes } }];"
+        "jsCode": "const g = $input.first().json;\nconst final = g.fixed ?? g.output ?? g.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prev = $('دریافت متن فارسی').first().json;\nlet passes = 1;\nfor (const n of ['ویراستار ۲', 'ویراستار ۳', 'ویراستار ۴']) {\n  try { const it = $(n).first(); if (it && it.json) passes++; } catch (e) { break; }\n}\nconst gateClean = g.clean ?? true;\nreturn [{ json: { text: final, task_type: prev.task_type ?? '', rules_used: m.rules_count ?? 0, passes, mechanical_clean: gateClean, mechanical_remaining: g.remaining ?? [], needs_human_review: !gateClean } }];"
       }
     },
     {
@@ -457,7 +457,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": "1.1",
       "position": [
-        3340,
+        3560,
         200
       ],
       "parameters": {
@@ -481,7 +481,7 @@
         "headersOverride": "{\"Authorization\": \"Bearer <PUT-API-KEY-HERE>\"}",
         "operation": "executeTool",
         "toolName": "smart_rules",
-        "toolParameters": "{\n  \"text\": \"={{ $json.text }}\",\n  \"task_type\": \"={{ $json.task_type }}\",\n  \"max_rules\": 60\n}"
+        "toolParameters": "{\n  \"text\": \"={{ $json.fixed }}\",\n  \"task_type\": \"={{ $json.task_type }}\",\n  \"max_rules\": 60\n}"
       }
     },
     {
@@ -499,7 +499,7 @@
         "headersOverride": "{\"Authorization\": \"Bearer <PUT-API-KEY-HERE>\"}",
         "operation": "executeTool",
         "toolName": "smart_rules",
-        "toolParameters": "{\n  \"text\": \"={{ $json.text }}\",\n  \"task_type\": \"={{ $json.task_type }}\",\n  \"max_rules\": 60\n}"
+        "toolParameters": "{\n  \"text\": \"={{ $json.fixed }}\",\n  \"task_type\": \"={{ $json.task_type }}\",\n  \"max_rules\": 60\n}"
       }
     },
     {
@@ -516,6 +516,42 @@
         "toolsToInclude": "all",
         "notes": "یک‌بار در n8n بازش کن: SSE Endpoint را چک کن و توکن Bearer را در Credentials بگذار؛ Tools to Include = All."
       }
+    },
+    {
+      "id": "mcp-mech0",
+      "name": "پالایش مکانیکی",
+      "type": "n8n-nodes-mcp.mcpClient",
+      "typeVersion": "1",
+      "position": [
+        700,
+        200
+      ],
+      "parameters": {
+        "connectionType": "http",
+        "uriOverride": "http://localhost:8060/mcp",
+        "headersOverride": "{\"Authorization\": \"Bearer <PUT-API-KEY-HERE>\"}",
+        "operation": "executeTool",
+        "toolName": "mechanical_pass",
+        "toolParameters": "{\n  \"text\": \"={{ $json.text }}\"\n}"
+      }
+    },
+    {
+      "id": "mcp-mech9",
+      "name": "دروازهٔ مکانیکی",
+      "type": "n8n-nodes-mcp.mcpClient",
+      "typeVersion": "1",
+      "position": [
+        3120,
+        200
+      ],
+      "parameters": {
+        "connectionType": "http",
+        "uriOverride": "http://localhost:8060/mcp",
+        "headersOverride": "{\"Authorization\": \"Bearer <PUT-API-KEY-HERE>\"}",
+        "operation": "executeTool",
+        "toolName": "mechanical_pass",
+        "toolParameters": "{\n  \"text\": \"={{ $json.output }}\"\n}"
+      }
     }
   ],
   "connections": {
@@ -523,7 +559,7 @@
       "main": [
         [
           {
-            "node": "smart_rules",
+            "node": "پالایش مکانیکی",
             "type": "main",
             "index": 0
           }
@@ -873,19 +909,10 @@
       ]
     },
     "خوانش آخر": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "مدل زبانی",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ],
       "main": [
         [
           {
-            "node": "گزارش نهایی",
+            "node": "دروازهٔ مکانیکی",
             "type": "main",
             "index": 0
           }
@@ -908,6 +935,28 @@
         [
           {
             "node": "پرامپت پاس ۱",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "پالایش مکانیکی": {
+      "main": [
+        [
+          {
+            "node": "smart_rules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "دروازهٔ مکانیکی": {
+      "main": [
+        [
+          {
+            "node": "گزارش نهایی",
             "type": "main",
             "index": 0
           }
