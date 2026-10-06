@@ -14,7 +14,7 @@
         "color": 4,
         "height": 460,
         "width": 420,
-        "content": "## ویراستار عمیق فارسی\nمتن را در چند پاسِ ویراستاری-بازبینی صیقل می‌دهد تا تمیز شود.\n\n۱. سرور: `obper-mcp --transport streamable-http --port 8060 --api-key <KEY>`\n۲. در گره smart_rules کلید را در Headers Override بگذار\n۳. به گره «مدل زبانی» کردنشیال مدل وصل کن\n۴. تست: POST /fa-deep-edit با `{\"text\": \"...\", \"task_type\": \"گزارش رسمی\"}`\n\nابزار smart_rules اول متن را معاینه می‌کند (جملهٔ بلند، حشو اداری، حروف عربی، نشانهٔ لاتین، نیم‌فاصله...) و برای ایرادهای واقعاً موجود قاعده می‌آورد (~۶۰ قاعده، هر کدام با دلیل انتخاب) → تا ۴ پاس ویراستاری (هر پاس فقط اگر بازبین ایراد بگیرد) → خوانش آخر → متن نهایی + گزارش."
+        "content": "## ویراستار عمیق فارسی\nمتن را در چند پاسِ ویراستاری-بازبینی صیقل می‌دهد تا تمیز شود.\n\n۱. سرور: `obper-mcp --transport streamable-http --port 8060 --api-key <KEY>`\n۲. در گره smart_rules کلید را در Headers Override بگذار\n۳. گره «ابزارهای والت» را باز کن: SSE Endpoint را\n   `http://localhost:8060/mcp/sse` بگذار و توکن Bearer را در Credentials ست کن\n۴. به گره «مدل زبانی» کردنشیال مدل وصل کن\n۵. تست: POST /fa-deep-edit با `{\"text\": \"...\", \"task_type\": \"گزارش رسمی\"}`\n\nمعماری: smart_rules اول متن را معاینه می‌کند و چک‌لیست مخصوص همان متن را\nمی‌دهد؛ ویراستار با چک‌لیست کار می‌کند، ولی «بازبین»ها به کل والت دسترسی\nمستقیم دارند (search/ruling/read_note/map_vault) و هر شکی را خودشان در\nوالت راستی‌آزمایی می‌کنند — داور، کتابخانه را می‌شناسد، نه فقط خلاصه را."
       }
     },
     {
@@ -75,7 +75,7 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج. '\n  + 'هر بندی که هنوز رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
+        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج.\\n'\n  + 'تو به ابزارهای کل والت دسترسی داری (search، ruling، read_note، map_vault): '\n  + 'هرجا شکی داشتی — واژه، نشانه‌گذاری، ساختار جمله، لحن — اول با ابزارها در والت '\n  + 'راستی‌آزمایی کن و بعد قضاوت کن. اگر نمی‌دانی کجا را بگردی، اول map_vault را ببین. '\n  + 'چک‌لیست نقطهٔ شروع است نه سقف؛ اگر ایرادی خارج از چک‌لیست دیدی و والت تأییدش کرد، گزارش بده. '\n  + 'هر بندی که هنوز رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
       }
     },
     {
@@ -91,7 +91,7 @@
         "promptType": "define",
         "text": "={{ $json.prompt }}",
         "options": {
-          "systemMessage": "تو بازبین سخت‌گیر ویراستاری فارسی هستی. کارت مچ‌گیری است، نه تعریف؛ فقط ایراد واقعی و مشخص گزارش می‌کنی."
+          "systemMessage": "تو ویراستار ارشد و بازبین سخت‌گیر زبان فارسی هستی و به کل والت ۱۵۷۷ یادداشتی دسترسی مستقیم داری (ابزارهای search، ruling، read_note، map_vault). کارت مچ‌گیری است، نه تعریف؛ فقط ایراد واقعی و مشخص گزارش می‌کنی و هر شکی را اول با ابزارهای والت راستی‌آزمایی می‌کنی."
         }
       }
     },
@@ -183,7 +183,7 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج. '\n  + 'هر بندی که هنوز رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
+        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج.\\n'\n  + 'تو به ابزارهای کل والت دسترسی داری (search، ruling، read_note، map_vault): '\n  + 'هرجا شکی داشتی — واژه، نشانه‌گذاری، ساختار جمله، لحن — اول با ابزارها در والت '\n  + 'راستی‌آزمایی کن و بعد قضاوت کن. اگر نمی‌دانی کجا را بگردی، اول map_vault را ببین. '\n  + 'چک‌لیست نقطهٔ شروع است نه سقف؛ اگر ایرادی خارج از چک‌لیست دیدی و والت تأییدش کرد، گزارش بده. '\n  + 'هر بندی که هنوز رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
       }
     },
     {
@@ -199,7 +199,7 @@
         "promptType": "define",
         "text": "={{ $json.prompt }}",
         "options": {
-          "systemMessage": "تو بازبین سخت‌گیر ویراستاری فارسی هستی. کارت مچ‌گیری است، نه تعریف؛ فقط ایراد واقعی و مشخص گزارش می‌کنی."
+          "systemMessage": "تو ویراستار ارشد و بازبین سخت‌گیر زبان فارسی هستی و به کل والت ۱۵۷۷ یادداشتی دسترسی مستقیم داری (ابزارهای search، ruling، read_note، map_vault). کارت مچ‌گیری است، نه تعریف؛ فقط ایراد واقعی و مشخص گزارش می‌کنی و هر شکی را اول با ابزارهای والت راستی‌آزمایی می‌کنی."
         }
       }
     },
@@ -291,7 +291,7 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج. '\n  + 'هر بندی که هنوز رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
+        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج.\\n'\n  + 'تو به ابزارهای کل والت دسترسی داری (search، ruling، read_note، map_vault): '\n  + 'هرجا شکی داشتی — واژه، نشانه‌گذاری، ساختار جمله، لحن — اول با ابزارها در والت '\n  + 'راستی‌آزمایی کن و بعد قضاوت کن. اگر نمی‌دانی کجا را بگردی، اول map_vault را ببین. '\n  + 'چک‌لیست نقطهٔ شروع است نه سقف؛ اگر ایرادی خارج از چک‌لیست دیدی و والت تأییدش کرد، گزارش بده. '\n  + 'هر بندی که هنوز رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
       }
     },
     {
@@ -307,7 +307,7 @@
         "promptType": "define",
         "text": "={{ $json.prompt }}",
         "options": {
-          "systemMessage": "تو بازبین سخت‌گیر ویراستاری فارسی هستی. کارت مچ‌گیری است، نه تعریف؛ فقط ایراد واقعی و مشخص گزارش می‌کنی."
+          "systemMessage": "تو ویراستار ارشد و بازبین سخت‌گیر زبان فارسی هستی و به کل والت ۱۵۷۷ یادداشتی دسترسی مستقیم داری (ابزارهای search، ruling، read_note، map_vault). کارت مچ‌گیری است، نه تعریف؛ فقط ایراد واقعی و مشخص گزارش می‌کنی و هر شکی را اول با ابزارهای والت راستی‌آزمایی می‌کنی."
         }
       }
     },
@@ -386,51 +386,6 @@
         "options": {
           "systemMessage": "تو ویراستار ارشد زبان فارسی هستی؛ مسلط به رسم‌الخط و نیم‌فاصله، نشانه‌گذاری فارسی، دستور زبان، جمله‌بندی، واژه‌گزینی، سبک و لحن. هر جمله را با گوش بومی محک می‌زنی: اگر فارسی‌زبان این‌طور نمی‌گوید، بازنویسی می‌کنی. نشانه‌گذاری فقط فارسی (، ؟ ؛ «»)؛ خط تیرهٔ فرنگی ممنوع؛ رجیستر یکدست."
         }
-      }
-    },
-    {
-      "id": "code-r4",
-      "name": "آماده‌سازی بازبینی ۴",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": "2",
-      "position": [
-        1940,
-        920
-      ],
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const edited = $input.first().json.output ?? $input.first().json.text ?? '';\nconst m = $('smart_rules').first().json;\nconst prompt =\n  'این چک‌لیست ویراستاری را بگیر و متن ویراسته را بند به بند با آن بسنج. '\n  + 'هر بندی که هنوز رعایت نشده، دقیق بنویس کجای متن و چه ایرادی. '\n  + 'خروجی فقط JSON معتبر، بدون هیچ متن اضافه:\\n'\n  + '{\"issues\": [\"ایراد ۱: ...\"], \"clean\": false}\\n'\n  + 'اگر هیچ ایرادی نیست: {\"issues\": [], \"clean\": true}\\n\\n'\n  + `چک‌لیست:\\n${m.checklist}\\n\\nمتن ویراسته:\\n${edited}`;\nreturn [{ json: { prompt, edited } }];"
-      }
-    },
-    {
-      "id": "ag-v4",
-      "name": "بازبین ۴",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": "1.8",
-      "position": [
-        2160,
-        920
-      ],
-      "parameters": {
-        "promptType": "define",
-        "text": "={{ $json.prompt }}",
-        "options": {
-          "systemMessage": "تو بازبین سخت‌گیر ویراستاری فارسی هستی. کارت مچ‌گیری است، نه تعریف؛ فقط ایراد واقعی و مشخص گزارش می‌کنی."
-        }
-      }
-    },
-    {
-      "id": "code-a4",
-      "name": "تحلیل بازبینی ۴",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": "2",
-      "position": [
-        2380,
-        920
-      ],
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const raw = $input.first().json.output ?? '';\nlet clean = true, issues = [];\ntry {\n  const m = raw.match(/\\{[\\s\\S]*\\}/);\n  if (m) { const o = JSON.parse(m[0]);\n    issues = Array.isArray(o.issues) ? o.issues : [];\n    clean = o.clean === true && issues.length === 0;\n  }\n} catch (e) { clean = false; issues = ['خروجی بازبین JSON نبود؛ بازبینی دستی لازم است.']; }\nreturn [{ json: { clean, issues } }];"
       }
     },
     {
@@ -546,6 +501,21 @@
         "toolName": "smart_rules",
         "toolParameters": "{\n  \"text\": \"={{ $json.text }}\",\n  \"task_type\": \"={{ $json.task_type }}\",\n  \"max_rules\": 60\n}"
       }
+    },
+    {
+      "id": "tool-vault",
+      "name": "ابزارهای والت",
+      "type": "@n8n/n8n-nodes-langchain.toolMcpClient",
+      "typeVersion": "1",
+      "position": [
+        1330,
+        1180
+      ],
+      "parameters": {
+        "sseEndpoint": "http://localhost:8060/mcp/sse",
+        "toolsToInclude": "all",
+        "notes": "یک‌بار در n8n بازش کن: SSE Endpoint را چک کن و توکن Bearer را در Credentials بگذار؛ Tools to Include = All."
+      }
     }
   ],
   "connections": {
@@ -617,6 +587,15 @@
           {
             "node": "تحلیل بازبینی ۱",
             "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "ai_tool": [
+        [
+          {
+            "node": "ابزارهای والت",
+            "type": "ai_tool",
             "index": 0
           }
         ]
@@ -711,6 +690,15 @@
             "index": 0
           }
         ]
+      ],
+      "ai_tool": [
+        [
+          {
+            "node": "ابزارهای والت",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
       ]
     },
     "تحلیل بازبینی ۲": {
@@ -799,6 +787,15 @@
           {
             "node": "تحلیل بازبینی ۳",
             "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "ai_tool": [
+        [
+          {
+            "node": "ابزارهای والت",
+            "type": "ai_tool",
             "index": 0
           }
         ]
